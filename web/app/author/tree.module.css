@@ -1,0 +1,22 @@
+/* State that depends on a node's OWN <details>, which Tailwind cannot express:
+   its group-open variant matches any open ancestor, so nested chevrons and
+   tags followed their parent instead of themselves. The child combinator
+   binds each rule to the summary's own details and no other. */
+
+.chevron {
+  transition: transform 150ms ease;
+}
+
+details[open] > summary .chevron {
+  transform: rotate(90deg);
+}
+
+details[open] > summary .hideWhenOpen {
+  display: none;
+}
+
+/* currentColor is the summary's own text colour, so the tint tracks the theme
+   without naming a palette value here. */
+details[open] > summary.tintWhenOpen {
+  background-color: color-mix(in srgb, currentColor 10%, transparent);
+}
