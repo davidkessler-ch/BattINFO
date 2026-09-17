@@ -63,7 +63,7 @@ export function deref(loc: Located): Located {
 // form sets it rather than asking. "unsupported" is an honest dead end: we
 // render nothing rather than guess wrong.
 export type Control =
-  | { kind: "text" }
+  | { kind: "text"; format?: string }
   | { kind: "number"; integer: boolean }
   | { kind: "boolean" }
   | { kind: "select"; options: string[] }
@@ -98,7 +98,7 @@ export function controlFor(loc: Located): Control {
 
   switch (schema.type) {
     case "string":
-      return { kind: "text" };
+      return { kind: "text", format: typeof schema.format === "string" ? schema.format : undefined };
     case "number":
       return { kind: "number", integer: false };
     case "integer":
@@ -112,6 +112,25 @@ export function controlFor(loc: Located): Control {
     default:
       return schema.properties ? { kind: "object" } : { kind: "unsupported" };
   }
+}
+
+// Requirements a schema states as a choice rather than a list: "one of these
+// must be present". A quantity says it this way -- a value, and a unit for it --
+// so `required` is empty and a plain reading of the schema shows nothing at all.
+// Branches that are not a bare `required` (the exemption a text-only value gets)
+// are skipped: they qualify the rule rather than name a field.
+export function requiredGroups(loc: Located): string[][] {
+  const { schema } = deref(loc);
+  const groups: string[][] = [];
+  for (const node of [schema, ...(schema?.allOf ?? [])]) {
+    const branches = node?.anyOf ?? node?.oneOf;
+    if (!Array.isArray(branches)) continue;
+    const named = branches
+      .filter((b: Schema) => b && Object.keys(b).length === 1 && Array.isArray(b.required))
+      .flatMap((b: Schema) => b.required as string[]);
+    if (named.length > 1) groups.push(named);
+  }
+  return groups;
 }
 
 export interface Field {
@@ -149,7 +168,10 @@ export function blankFor(loc: Located): unknown {
   }
 }
 
-// "positive_electrode_basis" -> "Positive electrode basis". The schemas carry
+// "positive_electrode_basis" -> "Positive electrode basis". Only a title on the
+// property itself is used: the title of a shared $ref target describes the
+// definition, not this use of it, so four electrode roles all read "Electrode".
+// The schemas carry
 // no `title`, so the key is the only label we have. If titles land upstream,
 // this falls back to them instead.
 export function labelFor(key: string, schema?: Schema): string {
@@ -170,7 +192,7 @@ export function fieldsOf(loc: Located): Field[] {
     const target = deref({ schema: sub, file });
     return {
       key,
-      label: labelFor(key, sub.title ? sub : target.schema),
+      label: labelFor(key, sub),
       help: sub.description ?? target.schema?.description,
       required: required.has(key),
       loc: target,

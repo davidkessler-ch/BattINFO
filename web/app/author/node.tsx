@@ -5,31 +5,45 @@
 // a 1856-field schema stays a short list.
 //
 // Layout rule: the row is the unit, and its slots never move --
-//   structure (chevron or +) | remove | label | info | control | status
-// Nesting indents the label only; the control column shrinks to fit, so
-// controls line up on one right edge at any depth. Leaf rows carry a divider
-// and branch headers a tint, so headers read as headings rather than fields.
+//   structure (chevron or +) | label | info | remove | control | state
+// The label names the row and the right-hand side carries everything about the
+// value: the control, whether it is still wanted, and what the validator says
+// about it. Nesting indents the label only; the control column shrinks to fit,
+// so controls line up on one right edge at any depth.
 //
-// Order rule: plain fields first, collapsible branches after them. The scalar
-// fields identify the node and are quick to fill; a branch expands and would
-// push them out of sight.
+// Order rule: plain fields first, collapsible branches after them.
+//
+// Errors are not re-derived here. Every row asks the validator's own issue list
+// what is wrong at its path, so pattern, format, length and the anyOf rules all
+// surface without this file knowing any of them.
 
 import { useState } from "react";
-import { blankFor, controlFor, fieldsOf, type Field, type Located } from "./schema";
+import { blankFor, controlFor, fieldsOf, requiredGroups, type Field, type Located } from "./schema";
 import styles from "./tree.module.css";
+import { SUGGESTS } from "./vocab";
 
 type Obj = Record<string, unknown>;
 
+// Dotted paths as lib/validate.ts reports them: "cell_spec.id", "notes.0".
+export type Issues = Map<string, string[]>;
+
 const ROW = "group/row flex items-center gap-1.5 py-1.5 pr-1";
-const LEAF_ROW = `${ROW} border-b border-ink-faint/10 hover:bg-ink/[0.03]`;
+const LEAF_ROW = `${ROW} hover:bg-ink/[0.03]`;
 const HEAD_ROW = `${ROW} rounded-sm bg-ink/[0.05] hover:bg-ink/[0.08]`;
+const DIVIDED = "border-b border-ink-faint/10";
 const CONTROL = "w-[17rem] min-w-[7rem]";
+const STATE = "w-16 shrink-0 pl-1.5 text-[10px] uppercase leading-tight tracking-wide";
 const LABEL = "min-w-0 max-w-[14rem] truncate text-sm text-ink-faint";
 const TITLE = "min-w-0 max-w-[14rem] truncate text-sm font-medium text-ink";
-const STATUS = "w-14 shrink-0 text-right text-[10px] uppercase tracking-wide";
 const TAG = "shrink-0 text-[10px] uppercase tracking-wide text-warning";
 const INPUT =
   "w-full rounded border bg-surface/60 px-2 py-1 text-sm text-ink focus:border-brand-500 focus:bg-surface focus:outline-none";
+
+// A schema `format` names a closed shape the browser already knows how to
+// collect, so the control becomes the right one instead of a bare text box.
+// `date-time` is deliberately absent: the native picker yields "2026-09-17T10:30"
+// with no offset, which the format then rejects -- a worse box than a plain one.
+const INPUT_TYPE: Record<string, string> = { uri: "url", email: "email", date: "date" };
 
 // Own-state styling lives in tree.module.css: Tailwind cannot scope a rule to
 // the element's own <details>, which nested chevrons and tags need.
@@ -44,31 +58,20 @@ function withoutKey(obj: Obj, key: string): Obj {
   return next;
 }
 
-// A required field that is still empty is the one thing the form should point
-// at: it is what stands between the draft and a valid record.
-function needsFilling(field: Field, value: unknown): boolean {
-  return field.required && (value === undefined || value === "");
+function join(path: string, key: string | number): string {
+  return path ? `${path}.${key}` : String(key);
 }
 
-// How many required fields are still empty anywhere under this node, so a
-// collapsed branch can say what it is hiding.
-function missingIn(loc: Located, value: unknown): number {
-  const control = controlFor(loc);
-  if (control.kind === "array") {
-    const items = Array.isArray(value) ? value : [];
-    return items.reduce<number>((total, item) => total + missingIn(control.items, item), 0);
-  }
-  if (control.kind !== "object") return 0;
-  const obj = (value ?? {}) as Obj;
+function isEmpty(value: unknown): boolean {
+  return value === undefined || value === "";
+}
+
+// Everything wrong at this path or anywhere beneath it, so a collapsed branch
+// can say what it is hiding.
+function countUnder(issues: Issues, path: string): number {
   let total = 0;
-  for (const field of fieldsOf(loc)) {
-    const child = controlFor(field.loc);
-    if (child.kind === "const") continue;
-    if (child.kind === "object" || child.kind === "array") {
-      if (field.required || field.key in obj) total += missingIn(field.loc, obj[field.key]);
-    } else if (needsFilling(field, obj[field.key])) {
-      total += 1;
-    }
+  for (const [at, messages] of issues) {
+    if (at === path || at.startsWith(`${path}.`)) total += messages.length;
   }
   return total;
 }
@@ -100,11 +103,16 @@ function Info({ text }: { text?: string }) {
   );
 }
 
-function Label({ field }: { field: Field }) {
+// What the validator says, under the control it is about rather than under the
+// label, so the complaint sits with the thing complained about.
+function Problem({ message }: { message?: string }) {
+  if (!message) return null;
   return (
-    <span className={LABEL} title={field.label}>
-      {field.label}
-    </span>
+    <div className="flex pb-1 pr-1">
+      <span className="flex-1" />
+      <p className={`${CONTROL} text-[11px] leading-snug text-warning`}>{message}</p>
+      <span className="w-16 shrink-0" />
+    </div>
   );
 }
 
@@ -158,7 +166,7 @@ function AddField({ options, onAdd }: { options: Field[]; onAdd: (field: Field) 
               onAdd(field);
               setOpen(false);
             }}
-            className={`${ROW} w-full border-b border-ink-faint/[0.07] text-left last:border-0 hover:bg-brand-500/10`}
+            className={`${ROW} ${DIVIDED} w-full text-left last:border-0 hover:bg-brand-500/10`}
           >
             <span className="w-3 shrink-0 text-center text-sm text-brandtext">+</span>
             <span className={`${LABEL} text-ink`} title={field.label}>
@@ -167,7 +175,6 @@ function AddField({ options, onAdd }: { options: Field[]; onAdd: (field: Field) 
             <Info text={field.help} />
             <span className="flex-1" />
             <span className={`${CONTROL} truncate text-xs text-ink-faint/60`}>{field.help}</span>
-            <span className="w-14 shrink-0" />
           </button>
         ))}
       </div>
@@ -231,12 +238,21 @@ function Leaf({
     );
   }
 
-  return <input type="text" className={cls} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />;
+  return (
+    <input
+      type={control.kind === "text" ? (INPUT_TYPE[control.format ?? ""] ?? "text") : "text"}
+      list={SUGGESTS[field.key]}
+      className={cls}
+      value={String(value ?? "")}
+      onChange={(e) => onChange(e.target.value)}
+    />
+  );
 }
 
 // A collapsible row with children under it: objects and arrays differ only in
-// what they hold, so both use this. Tinted, undivided, and with remove at the
-// far right -- the left of a header belongs to its chevron alone.
+// what they hold, so both use this. Tinted and undivided, so it reads as a
+// heading over the rows it contains. Its count stays on the left, because it
+// describes what opening the section would reveal rather than a value.
 //
 // Only the first level of nesting starts open; anything deeper waits to be
 // asked for. The initial state is frozen at mount so that a later re-render
@@ -245,7 +261,7 @@ function Branch({
   title,
   help,
   note,
-  missing,
+  problems,
   startOpen,
   onRemove,
   children,
@@ -253,7 +269,7 @@ function Branch({
   title: React.ReactNode;
   help?: string;
   note?: string;
-  missing?: number;
+  problems?: number;
   startOpen?: boolean;
   onRemove?: () => void;
   children: React.ReactNode;
@@ -266,9 +282,10 @@ function Branch({
         <span className={TITLE}>{title}</span>
         <Info text={help} />
         <Remove onClick={onRemove} />
-        {missing ? <span className={`${TAG} ${styles.hideWhenOpen}`}>{missing} required</span> : null}
+        {problems ? <span className={`${TAG} ${styles.hideWhenOpen}`}>{problems} to fix</span> : null}
         <span className="flex-1" />
         <span className={`${CONTROL} text-xs text-ink-faint/50`}>{note}</span>
+        <span className="w-16 shrink-0" />
       </summary>
       <Nested>{children}</Nested>
     </details>
@@ -278,14 +295,18 @@ function Branch({
 function ArrayBranch({
   field,
   value,
+  path,
   depth,
+  issues,
   onChange,
   onRemove,
   startOpen,
 }: {
   field: Field;
   value: unknown[];
+  path: string;
   depth: number;
+  issues: Issues;
   onChange: (next: unknown[]) => void;
   onRemove?: () => void;
   startOpen?: boolean;
@@ -301,35 +322,42 @@ function ArrayBranch({
       title={field.label}
       help={field.help}
       note={value.length ? `${value.length} item${value.length === 1 ? "" : "s"}` : undefined}
-      missing={missingIn(field.loc, value)}
+      problems={countUnder(issues, path)}
       startOpen={startOpen}
       onRemove={onRemove}
     >
-      {value.map((item, index) =>
-        itemIsObject ? (
+      {value.map((item, index) => {
+        const itemPath = join(path, index);
+        const problem = issues.get(itemPath)?.[0];
+        return itemIsObject ? (
           // An item exists because someone asked for it, so it starts open.
-          <Branch key={index} title={index + 1} missing={missingIn(control.items, item)} startOpen onRemove={() => drop(index)}>
+          <Branch key={index} title={index + 1} problems={countUnder(issues, itemPath)} startOpen onRemove={() => drop(index)}>
             <ObjectNode
               loc={control.items}
               value={(item ?? {}) as Obj}
+              path={itemPath}
               depth={depth + 1}
+              issues={issues}
               onChange={(next) => replace(index, next)}
             />
           </Branch>
         ) : (
-          <div key={index} className={LEAF_ROW}>
-            <Chevron hidden />
-            <span className={`${LABEL} tabular-nums`}>{index + 1}</span>
-            <Info />
-            <Remove onClick={() => drop(index)} />
-            <span className="flex-1" />
-            <div className={CONTROL}>
-              <Leaf field={{ ...field, loc: control.items }} value={item} onChange={(next) => replace(index, next)} />
+          <div key={index} className={DIVIDED}>
+            <div className={LEAF_ROW}>
+              <Chevron hidden />
+              <span className={`${LABEL} tabular-nums`}>{index + 1}</span>
+              <Info />
+              <Remove onClick={() => drop(index)} />
+              <span className="flex-1" />
+              <div className={CONTROL}>
+                <Leaf field={{ ...field, loc: control.items }} value={item} onChange={(next) => replace(index, next)} flagged={!!problem} />
+              </div>
+              <span className={STATE} />
             </div>
-            <span className="w-14 shrink-0" />
+            <Problem message={problem} />
           </div>
-        ),
-      )}
+        );
+      })}
       <button
         type="button"
         onClick={() => onChange([...value, blankFor(control.items)])}
@@ -346,11 +374,15 @@ export function ObjectNode({
   loc,
   value,
   onChange,
+  issues,
+  path = "",
   depth = 0,
 }: {
   loc: Located;
   value: Obj;
   onChange: (next: Obj) => void;
+  issues: Issues;
+  path?: string;
   depth?: number;
 }) {
   // Branches a reader has just asked for start open even when they sit deeper
@@ -360,7 +392,16 @@ export function ObjectNode({
   const fields = fieldsOf(loc);
   // A value the schema fixes is already set and not worth a row.
   const editable = fields.filter((field) => controlFor(field.loc).kind !== "const");
-  const shown = editable.filter((field) => field.required || field.key in value);
+  const byKey = (key: string) => editable.find((field) => field.key === key);
+
+  // A choice the schema states as "one of these": the row is the choice, so its
+  // label is a selector rather than a name. The member on show is owned by that
+  // row; any further members the record also carries stay ordinary rows, so
+  // nothing a record holds is ever hidden.
+  const groups = requiredGroups(loc).map((keys) => ({ keys, chosen: keys.find((key) => key in value) }));
+  const owned = new Set(groups.map((group) => group.chosen).filter(Boolean) as string[]);
+
+  const shown = editable.filter((field) => (field.required || field.key in value) && !owned.has(field.key));
   const addable = editable.filter((field) => !(field.key in value));
 
   const isBranch = (field: Field) => ["object", "array"].includes(controlFor(field.loc).kind);
@@ -371,10 +412,59 @@ export function ObjectNode({
     if (isBranch(field)) setOpened((keys) => [...keys, field.key]);
   }
 
+  // Switching the selector moves the row to another member of its group.
+  function choose(group: string[], nextKey: string) {
+    const current = group.find((key) => key in value);
+    let next = current ? withoutKey(value, current) : { ...value };
+    const field = nextKey ? byKey(nextKey) : undefined;
+    onChange(field ? withKey(next, field.key, blankFor(field.loc)) : next);
+  }
+
   return (
     <div>
+      {groups.map((group) => {
+        const field = group.chosen ? byKey(group.chosen) : undefined;
+        const here = field ? join(path, field.key) : "";
+        const current = field ? value[field.key] : undefined;
+        const problem = field ? issues.get(here)?.[0] : undefined;
+        const awaited = !field || (isEmpty(current) && !!problem);
+        return (
+          <div key={group.keys.join()} className={DIVIDED}>
+            <div className={LEAF_ROW}>
+              <Chevron hidden />
+              <select
+                value={group.chosen ?? ""}
+                onChange={(e) => choose(group.keys, e.target.value)}
+                title="Which of these the record states"
+                className={`${LABEL} rounded border border-transparent bg-transparent py-0.5 hover:border-border focus:border-brand-500 focus:outline-none`}
+              >
+                <option value="">choose…</option>
+                {group.keys.map((key) => (
+                  <option key={key} value={key}>
+                    {byKey(key)?.label ?? key}
+                  </option>
+                ))}
+              </select>
+              <Info text={field?.help} />
+              <Remove onClick={group.chosen ? () => choose(group.keys, "") : undefined} />
+              <span className="flex-1" />
+              <div className={CONTROL}>
+                {field ? (
+                  <Leaf field={field} value={current} onChange={(next) => onChange(withKey(value, field.key, next))} flagged={awaited} />
+                ) : (
+                  <p className="px-2 py-1 text-xs text-ink-faint/60">choose one on the left</p>
+                )}
+              </div>
+              <span className={`${STATE} ${awaited ? "text-warning" : "text-transparent"}`}>required</span>
+            </div>
+            <Problem message={awaited ? undefined : problem} />
+          </div>
+        );
+      })}
+
       {ordered.map((field) => {
         const control = controlFor(field.loc);
+        const here = join(path, field.key);
         const set = (next: unknown) => onChange(withKey(value, field.key, next));
         const remove = field.required ? undefined : () => onChange(withoutKey(value, field.key));
         const startOpen = depth === 0 || opened.includes(field.key);
@@ -385,14 +475,16 @@ export function ObjectNode({
               key={field.key}
               title={field.label}
               help={field.help}
-              missing={missingIn(field.loc, value[field.key])}
+              problems={countUnder(issues, here)}
               startOpen={startOpen}
               onRemove={remove}
             >
               <ObjectNode
                 loc={field.loc}
                 value={(value[field.key] ?? {}) as Obj}
+                path={here}
                 depth={depth + 1}
+                issues={issues}
                 onChange={set}
               />
             </Branch>
@@ -405,7 +497,9 @@ export function ObjectNode({
               key={field.key}
               field={field}
               value={(value[field.key] ?? []) as unknown[]}
+              path={here}
               depth={depth}
+              issues={issues}
               startOpen={startOpen}
               onChange={set}
               onRemove={remove}
@@ -413,23 +507,39 @@ export function ObjectNode({
           );
         }
 
-        const flagged = needsFilling(field, value[field.key]);
+        // An empty box that something is waiting on says so in one word. The
+        // validator's own sentence is kept for a value that is present but
+        // wrong, where the reason actually needs explaining.
+        const current = value[field.key];
+        const problem = issues.get(here)?.[0];
+        const awaited = isEmpty(current) && (field.required || !!problem);
         return (
-          <div key={field.key} className={LEAF_ROW}>
-            <Chevron hidden />
-            <Label field={field} />
-            <Info text={field.help} />
-            <Remove onClick={remove} />
-            <span className="flex-1" />
-            <div className={CONTROL}>
-              <Leaf field={field} value={value[field.key]} onChange={set} flagged={flagged} />
+          <div key={field.key} className={DIVIDED}>
+            <div className={LEAF_ROW}>
+              <Chevron hidden />
+              <Label field={field} />
+              <Info text={field.help} />
+              <Remove onClick={remove} />
+              <span className="flex-1" />
+              <div className={CONTROL}>
+                <Leaf field={field} value={current} onChange={set} flagged={awaited || !!problem} />
+              </div>
+              <span className={`${STATE} ${awaited ? "text-warning" : "text-transparent"}`}>required</span>
             </div>
-            <span className={`${STATUS} ${flagged ? "text-warning" : "text-transparent"}`}>{flagged ? "required" : ""}</span>
+            <Problem message={awaited ? undefined : problem} />
           </div>
         );
       })}
 
       <AddField options={addable} onAdd={add} />
     </div>
+  );
+}
+
+function Label({ field }: { field: Field }) {
+  return (
+    <span className={LABEL} title={field.label}>
+      {field.label}
+    </span>
   );
 }

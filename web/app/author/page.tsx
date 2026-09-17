@@ -9,6 +9,7 @@ import { blankFor, schemaFor } from "./schema";
 import { ObjectNode } from "./node";
 import { SCHEMA_VERSION } from "@/lib/create-model";
 import { validateRecordAs } from "@/lib/validate";
+import { MATERIALS, MATERIAL_LIST, UNITS, UNIT_LIST } from "./vocab";
 
 const RECORD_TYPE = "cell_spec";
 const SCHEMA_FILE = "cell-spec.schema.json";
@@ -54,9 +55,21 @@ export default function BuildPage() {
   const record = useMemo(() => (prune(draft) ?? {}) as Obj, [draft]);
   const result = useMemo(() => validateRecordAs(JSON.stringify(record), RECORD_TYPE), [record]);
   const errors = result.issues.filter((issue) => issue.severity === "error");
+  // The validator's findings, keyed by the dotted path it reports them at, so
+  // each row in the tree can look up what is wrong with itself.
+  const issues = useMemo(() => {
+    const byPath: Map<string, string[]> = new Map();
+    for (const issue of result.issues) {
+      byPath.set(issue.path, [...(byPath.get(issue.path) ?? []), issue.message]);
+    }
+    return byPath;
+  }, [result]);
   // A record that does not validate is not worth handing on, so the download
   // waits for it rather than producing a file someone else has to debug.
+  // Counted by distinct path: one unsatisfied `anyOf` raises an error per
+  // branch, and "13 fields" for a single missing unit would be a lie.
   const blocked = errors.length > 0;
+  const stuck = new Set(errors.map((issue) => issue.path)).size;
 
   return (
     <main className="mx-auto max-w-7xl px-6 py-10">
@@ -69,14 +82,14 @@ export default function BuildPage() {
 
       <div className="mt-6 grid gap-10 lg:grid-cols-5">
         <section className="lg:col-span-3">
-          <ObjectNode loc={root} value={draft} onChange={setDraft} />
+          <ObjectNode loc={root} value={draft} onChange={setDraft} issues={issues} />
         </section>
 
         <section className="lg:col-span-2 lg:sticky lg:top-6 lg:self-start">
           <div className="mb-2 flex items-center justify-between gap-4">
             <p className={`text-sm ${blocked ? "text-warning" : "text-ink-faint"}`}>
               {blocked
-                ? `${errors.length} field${errors.length === 1 ? "" : "s"} to fill — download blocked`
+                ? `${stuck} field${stuck === 1 ? "" : "s"} to fill — download blocked`
                 : "Valid against the schema — ready to download"}
             </p>
             <button
@@ -102,6 +115,17 @@ export default function BuildPage() {
           </pre>
         </section>
       </div>
+
+      <datalist id={UNIT_LIST}>
+        {UNITS.map((unit) => (
+          <option key={unit} value={unit} />
+        ))}
+      </datalist>
+      <datalist id={MATERIAL_LIST}>
+        {MATERIALS.map((material) => (
+          <option key={material} value={material} />
+        ))}
+      </datalist>
     </main>
   );
 }
