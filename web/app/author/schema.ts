@@ -17,6 +17,12 @@ export interface Located {
 
 const BY_PATH = new Map(schemaFiles.map((f) => [f.path, f.schema]));
 
+// Paths are spelled the way lib/validate.ts reports them -- "cell_spec.id",
+// "notes.0" -- so a row can look itself up in the validator's own findings.
+export function join(path: string, key: string | number): string {
+  return path ? `${path}.${key}` : String(key);
+}
+
 export function schemaFor(file: string): Located {
   const schema = BY_PATH.get(file);
   if (!schema) throw new Error(`no such schema file: ${file}`);

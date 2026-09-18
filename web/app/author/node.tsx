@@ -21,19 +21,19 @@
 // surface without this file knowing any of them.
 
 import { useState } from "react";
-import { blankFor, controlFor, fieldsOf, requiredGroups, type Field, type Located } from "./schema";
+import { blankFor, controlFor, fieldsOf, join, requiredGroups, type Field, type Located } from "./schema";
 import styles from "./tree.module.css";
 import { PROPERTY_LIST, SUGGESTS } from "./vocab";
 
 type Obj = Record<string, unknown>;
 
 // Dotted paths as lib/validate.ts reports them: "cell_spec.id", "notes.0".
-export type Issues = Map<string, string[]>;
+type Issues = Map<string, string[]>;
 
 // Something the page wants to add under one row: the content, and optionally a
 // line explaining it, which the tree shows through the same icon every other
 // explanation uses.
-export type After = (path: string) => { content: React.ReactNode; help?: string } | null;
+type After = (path: string) => { content: React.ReactNode; help?: string } | null;
 
 const ROW = "group/row flex items-center gap-1.5 py-1.5 pr-1";
 const LEAF_ROW = `${ROW} hover:bg-ink/[0.03]`;
@@ -66,10 +66,6 @@ function withoutKey(obj: Obj, key: string): Obj {
   const next = { ...obj };
   delete next[key];
   return next;
-}
-
-function join(path: string, key: string | number): string {
-  return path ? `${path}.${key}` : String(key);
 }
 
 function isEmpty(value: unknown): boolean {

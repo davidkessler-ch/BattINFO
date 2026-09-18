@@ -9,7 +9,7 @@ import { blankFor, schemaFor } from "./schema";
 import { ObjectNode } from "./node";
 import { MATERIAL_LIST, MATERIAL_SYMBOLS, PROPERTY_KEYS, PROPERTY_LIST, UNIT_LIST, UNIT_SYMBOLS } from "./vocab";
 import { SCHEMA_VERSION } from "@/lib/create-model";
-import { StartScreen, type Loaded } from "./start";
+import { StartScreen, buttonClass, type Loaded } from "./start";
 import { validateRecordAs } from "@/lib/validate";
 
 const RECORD_TYPE = "cell_spec";
@@ -29,11 +29,9 @@ const STORAGE_KEY = "battinfo.author.cell_spec";
 // its own discriminator key.
 const JSONLD_TYPE = "cell-spec";
 
-// TEMPORARY. The transform is a Python function that only exists on a
-// deployment, so `next dev` has nothing to call; pointing this at a preview URL
-// is the only way to exercise JSON-LD locally. Delete once the endpoint can be
-// run alongside the dev server.
-const CONVERT_URL = process.env.NEXT_PUBLIC_CONVERT_URL ?? "/api/convert";
+// A Python function, so it only exists on a deployment: under `next dev` this
+// path 404s and the button reports it.
+const CONVERT_URL = "/api/convert";
 
 const PLACEHOLDER_HINT =
   "Stands in so the record validates. BattINFO mints the real IRI when the record is saved — do not publish this one.";
@@ -53,12 +51,6 @@ function notValidBecause(errors: { path: string; message: string }[]): string {
     "",
     "Save it anyway as a checkpoint to continue later?",
   ].join("\n");
-}
-
-function buttonClass(off: boolean): string {
-  return `shrink-0 rounded border px-3 py-1 text-sm ${
-    off ? "cursor-not-allowed border-border/40 text-ink-faint/40" : "border-border text-ink hover:border-brand-500"
-  }`;
 }
 
 // Drop what the user has not filled in. An empty box means "not stated", and a
@@ -196,8 +188,14 @@ export default function AuthorPage() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ record_type: JSONLD_TYPE, record }),
       });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error ?? response.statusText);
+      const text = await response.text();
+      let body: { error?: string } | null = null;
+      try {
+        body = JSON.parse(text);
+      } catch {
+        // An error page rather than an answer: the status is the whole story.
+      }
+      if (!response.ok || !body) throw new Error(body?.error ?? `${response.status} ${response.statusText}`);
       save("cell-spec.jsonld", "application/ld+json", JSON.stringify(body, null, 2));
     } catch (error) {
       setConvertError(error instanceof Error ? error.message : String(error));

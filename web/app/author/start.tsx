@@ -10,23 +10,24 @@
 // of thing.
 
 import { useRef, useState } from "react";
-import { controlFor, fieldsOf, type Located } from "./schema";
+import { controlFor, fieldsOf, join, type Located } from "./schema";
 import { TEMPLATES } from "@/lib/templates.generated";
 
 type Obj = Record<string, unknown>;
 
-const BUTTON =
-  "rounded border border-border px-3 py-1 text-sm text-ink hover:border-brand-500";
-
-function join(path: string, key: string): string {
-  return path ? `${path}.${key}` : key;
+// One button shape for the whole page. It lives here because page.tsx imports
+// this module, not the other way round.
+export function buttonClass(off = false): string {
+  return `shrink-0 rounded border px-3 py-1 text-sm ${
+    off ? "cursor-not-allowed border-border/40 text-ink-faint/40" : "border-border text-ink hover:border-brand-500"
+  }`;
 }
 
 // An uploaded file is someone else's JSON. Anything the schema does not know is
 // dropped rather than carried into a record that would then fail validation for
 // a reason the form cannot show -- the tree only draws fields the schema names,
 // so an unknown key would be invisible and still in the output.
-export function sanitize(value: unknown, loc: Located, path = "", removed: string[] = []): unknown {
+function sanitize(value: unknown, loc: Located, path = "", removed: string[] = []): unknown {
   const control = controlFor(loc);
   if (value === null || typeof value !== "object") return value;
 
@@ -71,7 +72,7 @@ async function read(file: File, root: Located): Promise<Loaded> {
   return { record: sanitize(parsed, root, "", removed) as Obj, removed };
 }
 
-export function UploadButton({
+function UploadButton({
   root,
   onLoad,
   onError,
@@ -85,7 +86,7 @@ export function UploadButton({
   const input = useRef<HTMLInputElement>(null);
   return (
     <>
-      <button type="button" className={BUTTON} onClick={() => input.current?.click()}>
+      <button type="button" className={buttonClass()} onClick={() => input.current?.click()}>
         {label}
       </button>
       <input
