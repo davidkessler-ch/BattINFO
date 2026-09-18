@@ -4,7 +4,7 @@
 // nesting level below comes from cell-spec.schema.json at runtime -- this page
 // lists none of them, so it cannot drift from the package.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { blankFor, schemaFor } from "./schema";
 import { ObjectNode } from "./node";
 import { MATERIAL_LIST, MATERIAL_SYMBOLS, PROPERTY_KEYS, PROPERTY_LIST, UNIT_LIST, UNIT_SYMBOLS } from "./vocab";
@@ -20,6 +20,10 @@ const SCHEMA_FILE = "cell-spec.schema.json";
 // pattern, so a draft validates, and the library replaces it when it mints the
 // real IRI on save. Nothing here invents an identifier.
 const PLACEHOLDER_ID = "https://w3id.org/battinfo/spec/0000-0000-0000-0000";
+
+// Where an unfinished draft waits out a reload. Per record type, so other
+// record types can keep their own without colliding.
+const STORAGE_KEY = "battinfo.author.cell_spec";
 const PLACEHOLDER_HINT =
   "Stands in so the record validates. BattINFO mints the real IRI when the record is saved — do not publish this one.";
 
@@ -63,10 +67,36 @@ function download(record: unknown) {
 
 export default function AuthorPage() {
   const root = useMemo(() => schemaFor(SCHEMA_FILE), []);
-  const [placeholder, setPlaceholder] = useState(true);
   const [draft, setDraft] = useState<Obj>(() =>
     withPlaceholder({ ...(blankFor(root) as Obj), schema_version: SCHEMA_VERSION }, true),
   );
+
+  // The toggle is not state of its own: the placeholder is on exactly when the
+  // id is the sentinel, so there is nothing to keep in sync and nothing to save.
+  const placeholder = (draft.cell_spec as Obj | undefined)?.id === PLACEHOLDER_ID;
+
+  // Restored after mount rather than in the initialiser above: localStorage
+  // does not exist while the page is prerendered, and seeding state from it
+  // during render would make the server and the browser disagree.
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(STORAGE_KEY);
+      const parsed = saved ? JSON.parse(saved) : null;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) setDraft(parsed as Obj);
+    } catch {
+      // A draft that cannot be read is not worth failing the page over; the
+      // form opens empty and the next edit overwrites it.
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+    } catch {
+      // Storage can be full, blocked, or absent in a private window. Losing the
+      // draft on reload is a smaller failure than losing the form.
+    }
+  }, [draft]);
 
   const record = useMemo(() => (prune(draft) ?? {}) as Obj, [draft]);
   const result = useMemo(() => validateRecordAs(JSON.stringify(record), RECORD_TYPE), [record]);
@@ -96,7 +126,6 @@ export default function AuthorPage() {
   }
 
   function togglePlaceholder(on: boolean) {
-    setPlaceholder(on);
     setDraft((current) => withPlaceholder(current, on));
   }
 
@@ -142,8 +171,13 @@ export default function AuthorPage() {
 
           <span className="flex-1" />
 
-          <p className={`text-sm ${blocked ? "text-warning" : "text-ink-faint"}`}>
-            {blocked ? `${stuck} field${stuck === 1 ? "" : "s"} to fill` : "valid against the schema"}
+          <p className={`flex items-center gap-1.5 text-sm ${blocked ? "text-warning" : "text-volt-400"}`}>
+            {blocked ? null : (
+              <svg viewBox="0 0 16 16" aria-hidden className="w-3.5">
+                <path d="M3.5 8.5l3 3 6-6.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+            {blocked ? `${stuck} field${stuck === 1 ? "" : "s"} to fill` : "valid"}
           </p>
           <button
             type="button"

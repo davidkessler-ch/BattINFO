@@ -1,0 +1,4 @@
+# The transform the browser cannot do. Pinned to a commit of this repo so the
+# JSON-LD it emits matches the schemas the form validated against -- bump this
+# and lib/schemas.generated.ts together, or they can disagree.
+battinfo @ git+https://github.com/davidkessler-ch/BattINFO@996cffc2ee194aa992670df9bf29075241b7b35b
