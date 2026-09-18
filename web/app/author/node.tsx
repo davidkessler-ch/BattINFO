@@ -5,13 +5,16 @@
 // a 1856-field schema stays a short list.
 //
 // Layout rule: the row is the unit, and its slots never move --
-//   structure (chevron or +) | label | info | remove | control | state
+//   structure (chevron or +) | label | remove | info | control | state
 // The label names the row and the right-hand side carries everything about the
 // value: the control, whether it is still wanted, and what the validator says
 // about it. Nesting indents the label only; the control column shrinks to fit,
-// so controls line up on one right edge at any depth.
+// so controls line up on one right edge at any depth. Every row that holds a
+// value is one ValueRow, whatever names it -- a field, an index, a map key, or
+// a selector -- so the shape is defined once.
 //
-// Order rule: plain fields first, collapsible branches after them.
+// Order rule: what cannot collapse, then choices that can, then ordinary
+// sections. A choice about this node sits between its values and its parts.
 //
 // Errors are not re-derived here. Every row asks the validator's own issue list
 // what is wrong at its path, so pattern, format, length and the anyOf rules all
@@ -32,16 +35,17 @@ export type Issues = Map<string, string[]>;
 // explanation uses.
 export type After = (path: string) => { content: React.ReactNode; help?: string } | null;
 
-
 const ROW = "group/row flex items-center gap-1.5 py-1.5 pr-1";
 const LEAF_ROW = `${ROW} hover:bg-ink/[0.03]`;
-const HEAD_ROW = `${ROW} rounded-sm border-b border-ink-faint/10 hover:bg-ink/[0.04]`;
 const DIVIDED = "border-b border-ink-faint/10";
+const HEAD_ROW = `${ROW} ${DIVIDED} rounded-sm hover:bg-ink/[0.04]`;
 const CONTROL = "w-[17rem] min-w-[7rem]";
-const STATE = "w-16 shrink-0 pl-1.5 text-[10px] uppercase leading-tight tracking-wide";
-const LABEL = "min-w-0 max-w-[14rem] truncate text-sm text-ink-faint";
-const TITLE = "min-w-0 max-w-[14rem] truncate text-sm font-medium text-ink";
-const TAG = "shrink-0 text-[10px] uppercase tracking-wide text-warning";
+const NAME = "min-w-0 max-w-[14rem] truncate text-sm";
+const LABEL = `${NAME} text-ink-faint`;
+const TITLE = `${NAME} font-medium text-ink`;
+const SMALL = "text-[10px] uppercase tracking-wide";
+const STATE = `w-16 shrink-0 pl-1.5 leading-tight ${SMALL}`;
+const TAG = `shrink-0 text-warning ${SMALL}`;
 const INPUT =
   "w-full rounded border bg-surface/60 px-2 py-1 text-sm text-ink focus:border-brand-500 focus:bg-surface focus:outline-none";
 
@@ -130,6 +134,57 @@ function UnderControl({ text, children }: { text?: string; children?: React.Reac
         {text ?? children}
       </div>
       <span className="w-16 shrink-0" />
+    </div>
+  );
+}
+
+function Label({ field }: { field: Field }) {
+  return (
+    <span className={LABEL} title={field.label}>
+      {field.label}
+    </span>
+  );
+}
+
+// Every row that carries a value, whatever names it on the left. Keeping the
+// one shape here is what stops a change to rows having to be made four times.
+function ValueRow({
+  label,
+  help,
+  onRemove,
+  wanted,
+  problem,
+  extra,
+  children,
+}: {
+  label: React.ReactNode;
+  help?: string;
+  onRemove?: () => void;
+  wanted?: boolean;
+  problem?: string;
+  extra?: { content: React.ReactNode; help?: string } | null;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={DIVIDED}>
+      <div className={LEAF_ROW}>
+        <Chevron hidden />
+        {label}
+        <Remove onClick={onRemove} />
+        <span className="flex-1" />
+        <Info text={help} />
+        <div className={CONTROL}>{children}</div>
+        <span className={`${STATE} ${wanted ? "text-warning" : "text-transparent"}`}>required</span>
+      </div>
+      <UnderControl text={problem} />
+      {extra ? (
+        <UnderControl>
+          <span className="flex items-center gap-1.5">
+            {extra.content}
+            <Info text={extra.help} />
+          </span>
+        </UnderControl>
+      ) : null}
     </div>
   );
 }
@@ -364,20 +419,15 @@ function ArrayBranch({
             />
           </Branch>
         ) : (
-          <div key={index} className={DIVIDED}>
-            <div className={LEAF_ROW}>
-              <Chevron hidden />
-              <span className={`${LABEL} tabular-nums`}>{index + 1}</span>
-              <Remove onClick={() => drop(index)} />
-              <span className="flex-1" />
-              <Info />
-              <div className={CONTROL}>
-                <Leaf field={{ ...field, loc: control.items }} value={item} onChange={(next) => replace(index, next)} flagged={!!problem} />
-              </div>
-              <span className={STATE} />
-            </div>
-            <UnderControl text={problem} />
-          </div>
+          <ValueRow
+            key={index}
+            label={<span className={`${LABEL} tabular-nums`}>{index + 1}</span>}
+            onRemove={() => drop(index)}
+            problem={problem}
+            extra={after?.(itemPath)}
+          >
+            <Leaf field={{ ...field, loc: control.items }} value={item} onChange={(next) => replace(index, next)} flagged={!!problem} />
+          </ValueRow>
         );
       })}
       <button
@@ -464,25 +514,20 @@ function MapBranch({
             />
           </Branch>
         ) : (
-          <div key={key} className={DIVIDED}>
-            <div className={LEAF_ROW}>
-              <Chevron hidden />
-              <span className={LABEL}>{key}</span>
-              <Remove onClick={() => drop(key)} />
-              <span className="flex-1" />
-              <Info />
-              <div className={CONTROL}>
-                <Leaf
-                  field={{ ...field, loc: values }}
-                  value={item}
-                  onChange={(next) => onChange({ ...value, [key]: next })}
-                  flagged={issues.has(here)}
-                />
-              </div>
-              <span className={STATE} />
-            </div>
-            <UnderControl text={issues.get(here)?.[0]} />
-          </div>
+          <ValueRow
+            key={key}
+            label={<span className={LABEL}>{key}</span>}
+            onRemove={() => drop(key)}
+            problem={issues.get(here)?.[0]}
+            extra={after?.(here)}
+          >
+            <Leaf
+              field={{ ...field, loc: values }}
+              value={item}
+              onChange={(next) => onChange({ ...value, [key]: next })}
+              flagged={issues.has(here)}
+            />
+          </ValueRow>
         );
       })}
 
@@ -655,24 +700,21 @@ export function ObjectNode({
         }
 
         return (
-          <div key={group.keys.join()} className={DIVIDED}>
-            <div className={LEAF_ROW}>
-              <Chevron hidden />
-              {selector}
-              <Remove onClick={group.chosen ? () => choose(group.keys, "") : undefined} />
-              <span className="flex-1" />
-              <Info text={field?.help} />
-              <div className={CONTROL}>
-                {field ? (
-                  <Leaf field={field} value={current} onChange={set} flagged={awaited} />
-                ) : (
-                  <p className="px-2 py-1 text-xs text-ink-faint/60">choose one on the left</p>
-                )}
-              </div>
-              <span className={`${STATE} ${awaited ? "text-warning" : "text-transparent"}`}>required</span>
-            </div>
-            <UnderControl text={awaited ? undefined : problem} />
-          </div>
+          <ValueRow
+            key={group.keys.join()}
+            label={selector}
+            help={field?.help}
+            onRemove={group.chosen ? () => choose(group.keys, "") : undefined}
+            wanted={awaited}
+            problem={awaited ? undefined : problem}
+            extra={field ? after?.(here) : null}
+          >
+            {field ? (
+              <Leaf field={field} value={current} onChange={set} flagged={awaited} />
+            ) : (
+              <p className="px-2 py-1 text-xs text-ink-faint/60">choose one on the left</p>
+            )}
+          </ValueRow>
         );
   }
 
@@ -748,36 +790,22 @@ export function ObjectNode({
         const extra = after?.(here);
         const awaited = isEmpty(current) && (field.required || !!problem);
         return (
-          <div key={field.key} className={DIVIDED}>
-            <div className={LEAF_ROW}>
-              <Chevron hidden />
-              <Label field={field} />
-              <Remove onClick={remove} />
-              <span className="flex-1" />
-              <Info text={field.help} />
-              <div className={CONTROL}>
-                <Leaf field={field} value={current} onChange={set} flagged={awaited || !!problem} />
-              </div>
-              <span className={`${STATE} ${awaited ? "text-warning" : "text-transparent"}`}>
-                required
-              </span>
-            </div>
-            <UnderControl text={awaited ? undefined : problem} />
-            {extra ? (
-              <UnderControl>
-                <span className="flex items-center gap-1.5">
-                  {extra.content}
-                  <Info text={extra.help} />
-                </span>
-              </UnderControl>
-            ) : null}
-          </div>
+          <ValueRow
+            key={field.key}
+            label={<Label field={field} />}
+            help={field.help}
+            onRemove={remove}
+            wanted={awaited}
+            problem={awaited ? undefined : problem}
+            extra={extra}
+          >
+            <Leaf field={field} value={current} onChange={set} flagged={awaited || !!problem} />
+          </ValueRow>
         );
   }
 
   return (
     <div>
-
 
       {leaves.map(renderField)}
       {groups.filter((group) => !group.collapsible).map(renderGroup)}
@@ -789,10 +817,3 @@ export function ObjectNode({
   );
 }
 
-function Label({ field }: { field: Field }) {
-  return (
-    <span className={LABEL} title={field.label}>
-      {field.label}
-    </span>
-  );
-}

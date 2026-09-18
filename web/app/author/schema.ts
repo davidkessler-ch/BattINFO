@@ -187,9 +187,8 @@ export function blankFor(loc: Located): unknown {
 // "positive_electrode_basis" -> "Positive electrode basis". Only a title on the
 // property itself is used: the title of a shared $ref target describes the
 // definition, not this use of it, so four electrode roles all read "Electrode".
-// The schemas carry
-// no `title`, so the key is the only label we have. If titles land upstream,
-// this falls back to them instead.
+// Inline properties carry no title at all, so the key is usually the only label
+// there is; if titles land upstream this falls back to them instead.
 export function labelFor(key: string, schema?: Schema): string {
   if (schema?.title) return schema.title;
   const words = key.replace(/_/g, " ");

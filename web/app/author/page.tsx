@@ -7,7 +7,7 @@
 import { useMemo, useState } from "react";
 import { blankFor, schemaFor } from "./schema";
 import { ObjectNode } from "./node";
-import { MATERIALS, MATERIAL_LIST, PROPERTIES, PROPERTY_LIST, UNITS, UNIT_LIST } from "./vocab";
+import { MATERIAL_LIST, MATERIAL_SYMBOLS, PROPERTY_KEYS, PROPERTY_LIST, UNIT_LIST, UNIT_SYMBOLS } from "./vocab";
 import { SCHEMA_VERSION } from "@/lib/create-model";
 import { TEMPLATES } from "@/lib/templates.generated";
 import { validateRecordAs } from "@/lib/validate";
@@ -174,17 +174,17 @@ export default function AuthorPage() {
       </div>
 
       <datalist id={UNIT_LIST}>
-        {UNITS.map((unit) => (
+        {UNIT_SYMBOLS.map((unit) => (
           <option key={unit} value={unit} />
         ))}
       </datalist>
       <datalist id={PROPERTY_LIST}>
-        {PROPERTIES.map((key) => (
+        {PROPERTY_KEYS.map((key) => (
           <option key={key} value={key} />
         ))}
       </datalist>
       <datalist id={MATERIAL_LIST}>
-        {MATERIALS.map((material) => (
+        {MATERIAL_SYMBOLS.map((material) => (
           <option key={material} value={material} />
         ))}
       </datalist>

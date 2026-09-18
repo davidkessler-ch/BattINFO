@@ -9,11 +9,7 @@
 // These are suggestions, never restrictions: the schema does allow other
 // values, and a datalist offers without forbidding.
 
-import { MATERIAL_SYMBOLS, PROPERTY_KEYS, UNIT_SYMBOLS } from "@/lib/vocab.generated";
-
-export const UNITS = UNIT_SYMBOLS;
-export const MATERIALS = MATERIAL_SYMBOLS;
-export const PROPERTIES = PROPERTY_KEYS;
+export { MATERIAL_SYMBOLS, PROPERTY_KEYS, UNIT_SYMBOLS } from "@/lib/vocab.generated";
 
 export const UNIT_LIST = "vocab-units";
 export const MATERIAL_LIST = "vocab-materials";
