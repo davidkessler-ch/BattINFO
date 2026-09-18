@@ -38,8 +38,8 @@ type After = (path: string) => { content: React.ReactNode; help?: string } | nul
 const ROW = "group/row flex items-center gap-1.5 py-1.5 pr-1";
 const LEAF_ROW = `${ROW} hover:bg-ink/[0.03]`;
 const DIVIDED = "border-b border-ink-faint/10";
-const HEAD_ROW = `${ROW} ${DIVIDED} rounded-sm hover:bg-ink/[0.04]`;
-const CONTROL = "w-[17rem] min-w-[7rem]";
+const HEAD_ROW = `${ROW} ${DIVIDED} rounded-sm pl-2 hover:bg-ink/[0.04]`;
+const CONTROL = "w-[16rem] min-w-[7rem]";
 const NAME = "min-w-0 max-w-[14rem] truncate text-sm";
 const LABEL = `${NAME} text-ink-faint`;
 const TITLE = `${NAME} font-medium text-ink`;
@@ -99,7 +99,7 @@ function Chevron({ hidden }: { hidden?: boolean }) {
 function Info({ text }: { text?: string }) {
   if (!text) return <span className="w-3.5 shrink-0" />;
   return (
-    <span className="group/info relative w-3.5 shrink-0 cursor-help text-ink-faint/40 hover:text-ink-faint">
+    <span className="group/info relative w-3.5 shrink-0 cursor-help text-ink-faint/20 transition-colors group-hover/row:text-ink-faint/60 hover:!text-ink-faint">
       <svg viewBox="0 0 16 16" aria-hidden className="w-3.5">
         <circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
         <path
@@ -344,7 +344,7 @@ function Branch({
 }) {
   const [initiallyOpen] = useState(!!startOpen);
   return (
-    <details open={initiallyOpen} className="mt-1">
+    <details open={initiallyOpen} className="mt-3 first:mt-0">
       <summary className={`${HEAD_ROW} ${styles.headWhenOpen} cursor-pointer list-none marker:hidden`}>
         <Chevron />
         <span className={TITLE}>{title}</span>

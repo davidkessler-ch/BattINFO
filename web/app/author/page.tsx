@@ -252,7 +252,7 @@ export default function AuthorPage() {
             type="button"
             onClick={() => setStarted(false)}
             title="The screen where a record begins. This draft is kept."
-            className={`${buttonClass(false)} flex items-center gap-1.5`}
+            className="flex items-center gap-1.5 rounded px-2 py-1 text-sm text-ink-faint hover:bg-ink/[0.05] hover:text-ink"
           >
             <svg viewBox="0 0 12 12" aria-hidden className="w-3">
               <path d="M7.5 2.5L4 6l3.5 3.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -274,7 +274,7 @@ export default function AuthorPage() {
             type="button"
             onClick={downloadRecord}
             title="The record as it stands, finished or not. Re-upload it to carry on, or to start another from it."
-            className={buttonClass(false)}
+            className="shrink-0 rounded bg-brand-500 px-3 py-1 text-sm font-medium text-white hover:bg-brand-600"
           >
             Download BattINFO JSON
           </button>
@@ -301,16 +301,20 @@ export default function AuthorPage() {
         ) : null}
       </header>
 
-      <div className="mt-6 grid gap-10 lg:grid-cols-5">
-        <section className="lg:col-span-3">
+      <div className="mt-6 grid gap-8 xl:grid-cols-12">
+        <section className="xl:col-span-7">
           <ObjectNode loc={root} value={draft} onChange={setDraft} issues={issues} after={placeholderRow} />
         </section>
 
-        <section className="lg:col-span-2 lg:sticky lg:top-6 lg:self-start">
-          <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-faint">BattINFO JSON</h2>
-          <pre className="max-h-[75vh] overflow-auto rounded border border-border bg-surface p-3 text-xs leading-relaxed text-ink">
-            {JSON.stringify(record, null, 2)}
-          </pre>
+        <section className="xl:col-span-5 xl:sticky xl:top-6 xl:self-start">
+          <div className="overflow-hidden rounded border border-border">
+            <h2 className="border-b border-border bg-ink/[0.04] px-3 py-2 text-xs font-medium text-ink-faint">
+              BattINFO JSON
+            </h2>
+            <pre className="max-h-[75vh] overflow-auto bg-surface p-3 text-xs leading-relaxed text-ink">
+              {JSON.stringify(record, null, 2)}
+            </pre>
+          </div>
         </section>
       </div>
 
