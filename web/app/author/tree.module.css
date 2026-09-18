@@ -20,3 +20,12 @@ details[open] > summary .hideWhenOpen {
 details[open] > summary.tintWhenOpen {
   background-color: color-mix(in srgb, currentColor 10%, transparent);
 }
+
+/* A section reads as a heading over its contents only while it has contents on
+   show; closed, it is a row like any other and needs the divider that
+   separates rows. Open, the tint already separates it, so the rule steps back
+   rather than disappearing -- the height stays the same either way. */
+details[open] > summary.headWhenOpen {
+  background-color: color-mix(in srgb, currentColor 7%, transparent);
+  border-bottom-color: transparent;
+}

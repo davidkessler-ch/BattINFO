@@ -69,8 +69,22 @@ export type Control =
   | { kind: "select"; options: string[] }
   | { kind: "const"; value: unknown }
   | { kind: "object" }
+  | { kind: "map"; values: Located; keyPattern?: string }
   | { kind: "array"; items: Located }
   | { kind: "unsupported" };
+
+// An object with no fixed properties but a `patternProperties` rule is a named
+// map -- "diameter", "mass", any snake_case name the author chooses, each
+// holding the same kind of value. It is a container like an object, but its
+// keys come from the author rather than from the schema.
+function mapOrObject(schema: Schema, file: string): Control {
+  const named = Object.entries(schema.patternProperties ?? {});
+  if (named.length > 0 && Object.keys(schema.properties ?? {}).length === 0) {
+    const [keyPattern, values] = named[0] as [string, Schema];
+    return { kind: "map", values: deref({ schema: values, file }), keyPattern };
+  }
+  return { kind: "object" };
+}
 
 export function controlFor(loc: Located): Control {
   const { schema, file } = deref(loc);
@@ -106,11 +120,11 @@ export function controlFor(loc: Located): Control {
     case "boolean":
       return { kind: "boolean" };
     case "object":
-      return { kind: "object" };
+      return mapOrObject(schema, file);
     case "array":
       return { kind: "array", items: deref({ schema: schema.items ?? {}, file }) };
     default:
-      return schema.properties ? { kind: "object" } : { kind: "unsupported" };
+      return schema.properties || schema.patternProperties ? mapOrObject(schema, file) : { kind: "unsupported" };
   }
 }
 
@@ -154,6 +168,8 @@ export function blankFor(loc: Located): unknown {
       return false;
     case "array":
       return [];
+    case "map":
+      return {};
     case "object": {
       const out: Record<string, unknown> = {};
       for (const field of fieldsOf(loc)) {

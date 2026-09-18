@@ -9,13 +9,15 @@
 // These are suggestions, never restrictions: the schema does allow other
 // values, and a datalist offers without forbidding.
 
-import { MATERIAL_SYMBOLS, UNIT_SYMBOLS } from "@/lib/vocab.generated";
+import { MATERIAL_SYMBOLS, PROPERTY_KEYS, UNIT_SYMBOLS } from "@/lib/vocab.generated";
 
 export const UNITS = UNIT_SYMBOLS;
 export const MATERIALS = MATERIAL_SYMBOLS;
+export const PROPERTIES = PROPERTY_KEYS;
 
 export const UNIT_LIST = "vocab-units";
 export const MATERIAL_LIST = "vocab-materials";
+export const PROPERTY_LIST = "vocab-properties";
 
 // The one place a field name is bound to a vocabulary. The schemas offer no
 // structural marker for "this holds a unit", so the binding has to be written

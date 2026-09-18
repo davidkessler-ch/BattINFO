@@ -20,16 +20,22 @@
 import { useState } from "react";
 import { blankFor, controlFor, fieldsOf, requiredGroups, type Field, type Located } from "./schema";
 import styles from "./tree.module.css";
-import { SUGGESTS } from "./vocab";
+import { PROPERTY_LIST, SUGGESTS } from "./vocab";
 
 type Obj = Record<string, unknown>;
 
 // Dotted paths as lib/validate.ts reports them: "cell_spec.id", "notes.0".
 export type Issues = Map<string, string[]>;
 
+// Something the page wants to add under one row: the content, and optionally a
+// line explaining it, which the tree shows through the same icon every other
+// explanation uses.
+export type After = (path: string) => { content: React.ReactNode; help?: string } | null;
+
+
 const ROW = "group/row flex items-center gap-1.5 py-1.5 pr-1";
 const LEAF_ROW = `${ROW} hover:bg-ink/[0.03]`;
-const HEAD_ROW = `${ROW} rounded-sm bg-ink/[0.05] hover:bg-ink/[0.08]`;
+const HEAD_ROW = `${ROW} rounded-sm border-b border-ink-faint/10 hover:bg-ink/[0.04]`;
 const DIVIDED = "border-b border-ink-faint/10";
 const CONTROL = "w-[17rem] min-w-[7rem]";
 const STATE = "w-16 shrink-0 pl-1.5 text-[10px] uppercase leading-tight tracking-wide";
@@ -86,31 +92,43 @@ function Chevron({ hidden }: { hidden?: boolean }) {
   );
 }
 
-// The schema's description, one hover away. Kept off the row itself: with one
-// per field, printed descriptions drown the fields they explain.
+// The schema's description, one hover away, and sitting beside the control it
+// describes rather than beside the label: the question is always "what do I put
+// in this box". Kept to an icon because one printed description per field drowns
+// the fields it explains.
 function Info({ text }: { text?: string }) {
-  if (!text) return <span className="w-3 shrink-0" />;
+  if (!text) return <span className="w-3.5 shrink-0" />;
   return (
-    <span className="group/info relative w-3 shrink-0 cursor-help text-ink-faint/40 hover:text-ink-faint">
-      <svg viewBox="0 0 16 16" aria-hidden className="w-3">
+    <span className="group/info relative w-3.5 shrink-0 cursor-help text-ink-faint/40 hover:text-ink-faint">
+      <svg viewBox="0 0 16 16" aria-hidden className="w-3.5">
         <circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
-        <path d="M8 7.2v4M8 4.6v.8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+        <path
+          d="M6.1 6.1a1.9 1.9 0 1 1 2.5 1.8c-.4.15-.6.5-.6.9v.3"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.3"
+          strokeLinecap="round"
+        />
+        <circle cx="8" cy="11.6" r="0.75" fill="currentColor" />
       </svg>
-      <span className="pointer-events-none absolute left-5 top-0 z-20 hidden w-80 rounded border border-border bg-surface p-2 text-xs leading-snug text-ink shadow-lg group-hover/info:block">
+      <span className="pointer-events-none absolute right-5 top-0 z-20 hidden w-80 rounded border border-border bg-surface p-2 text-xs leading-snug text-ink shadow-lg group-hover/info:block">
         {text}
       </span>
     </span>
   );
 }
 
-// What the validator says, under the control it is about rather than under the
-// label, so the complaint sits with the thing complained about.
-function Problem({ message }: { message?: string }) {
-  if (!message) return null;
+// A line under the control it is about, rather than under the label, so what is
+// said sits with the thing it is said about. Carries either the validator's
+// complaint or a neutral note the page attached to this path.
+function UnderControl({ text, children }: { text?: string; children?: React.ReactNode }) {
+  if (!text && !children) return null;
   return (
     <div className="flex pb-1 pr-1">
       <span className="flex-1" />
-      <p className={`${CONTROL} text-[11px] leading-snug text-warning`}>{message}</p>
+      <div className={`${CONTROL} text-[11px] leading-snug ${text ? "text-warning" : "text-ink-faint"}`}>
+        {text ?? children}
+      </div>
       <span className="w-16 shrink-0" />
     </div>
   );
@@ -172,7 +190,6 @@ function AddField({ options, onAdd }: { options: Field[]; onAdd: (field: Field) 
             <span className={`${LABEL} text-ink`} title={field.label}>
               {field.label}
             </span>
-            <Info text={field.help} />
             <span className="flex-1" />
             <span className={`${CONTROL} truncate text-xs text-ink-faint/60`}>{field.help}</span>
           </button>
@@ -277,7 +294,7 @@ function Branch({
   const [initiallyOpen] = useState(!!startOpen);
   return (
     <details open={initiallyOpen} className="mt-1">
-      <summary className={`${HEAD_ROW} cursor-pointer list-none marker:hidden`}>
+      <summary className={`${HEAD_ROW} ${styles.headWhenOpen} cursor-pointer list-none marker:hidden`}>
         <Chevron />
         <span className={TITLE}>{title}</span>
         <Info text={help} />
@@ -294,19 +311,23 @@ function Branch({
 
 function ArrayBranch({
   field,
+  title,
   value,
   path,
   depth,
   issues,
+  after,
   onChange,
   onRemove,
   startOpen,
 }: {
   field: Field;
+  title?: React.ReactNode;
   value: unknown[];
   path: string;
   depth: number;
   issues: Issues;
+  after?: After;
   onChange: (next: unknown[]) => void;
   onRemove?: () => void;
   startOpen?: boolean;
@@ -319,7 +340,7 @@ function ArrayBranch({
 
   return (
     <Branch
-      title={field.label}
+      title={title ?? field.label}
       help={field.help}
       note={value.length ? `${value.length} item${value.length === 1 ? "" : "s"}` : undefined}
       problems={countUnder(issues, path)}
@@ -338,6 +359,7 @@ function ArrayBranch({
               path={itemPath}
               depth={depth + 1}
               issues={issues}
+              after={after}
               onChange={(next) => replace(index, next)}
             />
           </Branch>
@@ -346,15 +368,15 @@ function ArrayBranch({
             <div className={LEAF_ROW}>
               <Chevron hidden />
               <span className={`${LABEL} tabular-nums`}>{index + 1}</span>
-              <Info />
               <Remove onClick={() => drop(index)} />
               <span className="flex-1" />
+              <Info />
               <div className={CONTROL}>
                 <Leaf field={{ ...field, loc: control.items }} value={item} onChange={(next) => replace(index, next)} flagged={!!problem} />
               </div>
               <span className={STATE} />
             </div>
-            <Problem message={problem} />
+            <UnderControl text={problem} />
           </div>
         );
       })}
@@ -370,11 +392,130 @@ function ArrayBranch({
   );
 }
 
+// A named map: the keys are the author's (a property called "diameter", say),
+// the values all share one schema. It is a container like an object, but the
+// schema cannot list what is in it, so the form asks for the name too.
+function MapBranch({
+  field,
+  title,
+  value,
+  path,
+  depth,
+  issues,
+  after,
+  onChange,
+  onRemove,
+  startOpen,
+}: {
+  field: Field;
+  title?: React.ReactNode;
+  value: Obj;
+  path: string;
+  depth: number;
+  issues: Issues;
+  after?: After;
+  onChange: (next: Obj) => void;
+  onRemove?: () => void;
+  startOpen?: boolean;
+}) {
+  const [name, setName] = useState("");
+  const control = controlFor(field.loc);
+  if (control.kind !== "map") return null;
+  const values = control.values;
+  const pattern = control.keyPattern ?? ".";
+
+  const entries = Object.entries(value);
+  const nested = ["object", "map"].includes(controlFor(values).kind);
+  const legal = name !== "" && !(name in value) && new RegExp(pattern).test(name);
+
+  function add() {
+    if (!legal) return;
+    onChange({ ...value, [name]: blankFor(values) as Obj });
+    setName("");
+  }
+
+  function drop(key: string) {
+    const next = { ...value };
+    delete next[key];
+    onChange(next);
+  }
+
+  return (
+    <Branch
+      title={title ?? field.label}
+      help={field.help}
+      note={entries.length ? `${entries.length} entr${entries.length === 1 ? "y" : "ies"}` : undefined}
+      problems={countUnder(issues, path)}
+      startOpen={startOpen}
+      onRemove={onRemove}
+    >
+      {entries.map(([key, item]) => {
+        const here = join(path, key);
+        return nested ? (
+          <Branch key={key} title={key} problems={countUnder(issues, here)} startOpen onRemove={() => drop(key)}>
+            <ObjectNode
+              loc={values}
+              value={(item ?? {}) as Obj}
+              path={here}
+              depth={depth + 1}
+              issues={issues}
+              after={after}
+              onChange={(next) => onChange({ ...value, [key]: next })}
+            />
+          </Branch>
+        ) : (
+          <div key={key} className={DIVIDED}>
+            <div className={LEAF_ROW}>
+              <Chevron hidden />
+              <span className={LABEL}>{key}</span>
+              <Remove onClick={() => drop(key)} />
+              <span className="flex-1" />
+              <Info />
+              <div className={CONTROL}>
+                <Leaf
+                  field={{ ...field, loc: values }}
+                  value={item}
+                  onChange={(next) => onChange({ ...value, [key]: next })}
+                  flagged={issues.has(here)}
+                />
+              </div>
+              <span className={STATE} />
+            </div>
+            <UnderControl text={issues.get(here)?.[0]} />
+          </div>
+        );
+      })}
+
+      <div className={LEAF_ROW}>
+        <span className="w-3 shrink-0 text-center text-sm text-brandtext">+</span>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && add()}
+          placeholder="name"
+          list={PROPERTY_LIST}
+          className={`${LABEL} rounded border border-border bg-surface/60 px-2 py-0.5 text-ink focus:border-brand-500 focus:outline-none`}
+        />
+        <button
+          type="button"
+          onClick={add}
+          disabled={!legal}
+          className={`text-sm ${legal ? "text-brandtext" : "cursor-not-allowed text-ink-faint/40"}`}
+        >
+          add
+        </button>
+        <span className="flex-1" />
+      </div>
+    </Branch>
+  );
+}
+
 export function ObjectNode({
   loc,
   value,
   onChange,
   issues,
+  after,
   path = "",
   depth = 0,
 }: {
@@ -382,6 +523,7 @@ export function ObjectNode({
   value: Obj;
   onChange: (next: Obj) => void;
   issues: Issues;
+  after?: After;
   path?: string;
   depth?: number;
 }) {
@@ -398,14 +540,19 @@ export function ObjectNode({
   // label is a selector rather than a name. The member on show is owned by that
   // row; any further members the record also carries stay ordinary rows, so
   // nothing a record holds is ever hidden.
-  const groups = requiredGroups(loc).map((keys) => ({ keys, chosen: keys.find((key) => key in value) }));
+  const groups = requiredGroups(loc).map((keys) => {
+    const chosen = keys.find((key) => key in value);
+    const kind = chosen ? controlFor((byKey(chosen) as Field).loc).kind : "";
+    return { keys, chosen, collapsible: ["object", "map", "array"].includes(kind) };
+  });
   const owned = new Set(groups.map((group) => group.chosen).filter(Boolean) as string[]);
 
   const shown = editable.filter((field) => (field.required || field.key in value) && !owned.has(field.key));
   const addable = editable.filter((field) => !(field.key in value));
 
-  const isBranch = (field: Field) => ["object", "array"].includes(controlFor(field.loc).kind);
-  const ordered = [...shown.filter((f) => !isBranch(f)), ...shown.filter(isBranch)];
+  const isBranch = (field: Field) => ["object", "map", "array"].includes(controlFor(field.loc).kind);
+  const leaves = shown.filter((field) => !isBranch(field));
+  const branches = shown.filter(isBranch);
 
   function add(field: Field) {
     onChange(withKey(value, field.key, blankFor(field.loc)));
@@ -420,49 +567,116 @@ export function ObjectNode({
     onChange(field ? withKey(next, field.key, blankFor(field.loc)) : next);
   }
 
-  return (
-    <div>
-      {groups.map((group) => {
+  function renderGroup(group: (typeof groups)[number]) {
         const field = group.chosen ? byKey(group.chosen) : undefined;
         const here = field ? join(path, field.key) : "";
         const current = field ? value[field.key] : undefined;
         const problem = field ? issues.get(here)?.[0] : undefined;
+        const control = field ? controlFor(field.loc) : undefined;
         const awaited = !field || (isEmpty(current) && !!problem);
+        const set = (next: unknown) => (field ? onChange(withKey(value, field.key, next)) : undefined);
+
+        const collapsible = !!control && ["object", "map", "array"].includes(control.kind);
+
+        // The selector IS the row's name, so it goes wherever a label would --
+        // and when it names a section it carries a heading's weight.
+        const selector = (
+          <select
+            value={group.chosen ?? ""}
+            onChange={(e) => choose(group.keys, e.target.value)}
+            title="Which of these the record states"
+            className={`${collapsible ? TITLE : LABEL} rounded border border-transparent bg-transparent py-0.5 hover:border-border focus:border-brand-500 focus:outline-none`}
+          >
+            <option value="">choose…</option>
+            {group.keys.map((key) => (
+              <option key={key} value={key}>
+                {byKey(key)?.label ?? key}
+              </option>
+            ))}
+          </select>
+        );
+
+        // A member of the group can be a whole object or a list, not just a
+        // value -- an electrode is "one of spec id, coating, current collector,
+        // property", and three of those are objects. Such a choice opens as a
+        // section under the selector rather than being forced into a text box.
+        if (field && control && collapsible) {
+          if (control.kind === "map") {
+            return (
+              <MapBranch
+                key={group.keys.join()}
+                field={field}
+                title={selector}
+                value={(current ?? {}) as Obj}
+                path={here}
+                depth={depth}
+                issues={issues}
+                after={after}
+                startOpen
+                onChange={set as (next: Obj) => void}
+                onRemove={() => choose(group.keys, "")}
+              />
+            );
+          }
+          return control.kind === "array" ? (
+            <ArrayBranch
+              key={group.keys.join()}
+              field={field}
+              title={selector}
+              value={(current ?? []) as unknown[]}
+              path={here}
+              depth={depth}
+              issues={issues}
+              after={after}
+              startOpen
+              onChange={set}
+              onRemove={() => choose(group.keys, "")}
+            />
+          ) : (
+            <Branch
+              key={group.keys.join()}
+              title={selector}
+              help={field.help}
+              problems={countUnder(issues, here)}
+              startOpen
+              onRemove={() => choose(group.keys, "")}
+            >
+              <ObjectNode
+                loc={field.loc}
+                value={(current ?? {}) as Obj}
+                path={here}
+                depth={depth + 1}
+                issues={issues}
+                after={after}
+                onChange={set}
+              />
+            </Branch>
+          );
+        }
+
         return (
           <div key={group.keys.join()} className={DIVIDED}>
             <div className={LEAF_ROW}>
               <Chevron hidden />
-              <select
-                value={group.chosen ?? ""}
-                onChange={(e) => choose(group.keys, e.target.value)}
-                title="Which of these the record states"
-                className={`${LABEL} rounded border border-transparent bg-transparent py-0.5 hover:border-border focus:border-brand-500 focus:outline-none`}
-              >
-                <option value="">choose…</option>
-                {group.keys.map((key) => (
-                  <option key={key} value={key}>
-                    {byKey(key)?.label ?? key}
-                  </option>
-                ))}
-              </select>
-              <Info text={field?.help} />
+              {selector}
               <Remove onClick={group.chosen ? () => choose(group.keys, "") : undefined} />
               <span className="flex-1" />
+              <Info text={field?.help} />
               <div className={CONTROL}>
                 {field ? (
-                  <Leaf field={field} value={current} onChange={(next) => onChange(withKey(value, field.key, next))} flagged={awaited} />
+                  <Leaf field={field} value={current} onChange={set} flagged={awaited} />
                 ) : (
                   <p className="px-2 py-1 text-xs text-ink-faint/60">choose one on the left</p>
                 )}
               </div>
               <span className={`${STATE} ${awaited ? "text-warning" : "text-transparent"}`}>required</span>
             </div>
-            <Problem message={awaited ? undefined : problem} />
+            <UnderControl text={awaited ? undefined : problem} />
           </div>
         );
-      })}
+  }
 
-      {ordered.map((field) => {
+  function renderField(field: Field) {
         const control = controlFor(field.loc);
         const here = join(path, field.key);
         const set = (next: unknown) => onChange(withKey(value, field.key, next));
@@ -485,9 +699,27 @@ export function ObjectNode({
                 path={here}
                 depth={depth + 1}
                 issues={issues}
+                after={after}
                 onChange={set}
               />
             </Branch>
+          );
+        }
+
+        if (control.kind === "map") {
+          return (
+            <MapBranch
+              key={field.key}
+              field={field}
+              value={(value[field.key] ?? {}) as Obj}
+              path={here}
+              depth={depth}
+              issues={issues}
+              after={after}
+              startOpen={startOpen}
+              onChange={set as (next: Obj) => void}
+              onRemove={remove}
+            />
           );
         }
 
@@ -500,6 +732,7 @@ export function ObjectNode({
               path={here}
               depth={depth}
               issues={issues}
+              after={after}
               startOpen={startOpen}
               onChange={set}
               onRemove={remove}
@@ -512,24 +745,44 @@ export function ObjectNode({
         // wrong, where the reason actually needs explaining.
         const current = value[field.key];
         const problem = issues.get(here)?.[0];
+        const extra = after?.(here);
         const awaited = isEmpty(current) && (field.required || !!problem);
         return (
           <div key={field.key} className={DIVIDED}>
             <div className={LEAF_ROW}>
               <Chevron hidden />
               <Label field={field} />
-              <Info text={field.help} />
               <Remove onClick={remove} />
               <span className="flex-1" />
+              <Info text={field.help} />
               <div className={CONTROL}>
                 <Leaf field={field} value={current} onChange={set} flagged={awaited || !!problem} />
               </div>
-              <span className={`${STATE} ${awaited ? "text-warning" : "text-transparent"}`}>required</span>
+              <span className={`${STATE} ${awaited ? "text-warning" : "text-transparent"}`}>
+                required
+              </span>
             </div>
-            <Problem message={awaited ? undefined : problem} />
+            <UnderControl text={awaited ? undefined : problem} />
+            {extra ? (
+              <UnderControl>
+                <span className="flex items-center gap-1.5">
+                  {extra.content}
+                  <Info text={extra.help} />
+                </span>
+              </UnderControl>
+            ) : null}
           </div>
         );
-      })}
+  }
+
+  return (
+    <div>
+
+
+      {leaves.map(renderField)}
+      {groups.filter((group) => !group.collapsible).map(renderGroup)}
+      {groups.filter((group) => group.collapsible).map(renderGroup)}
+      {branches.map(renderField)}
 
       <AddField options={addable} onAdd={add} />
     </div>
