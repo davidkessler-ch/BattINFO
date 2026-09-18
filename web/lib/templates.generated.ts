@@ -10,6 +10,7 @@ export const TEMPLATES: { slug: string; format: string; record: Record<string, u
     "record": {
       "schema_version": "0.2.0",
       "cell_spec": {
+        "id": "https://w3id.org/battinfo/spec/zj8t-t6sa-qx3j-e1xj",
         "name": "A123 ANR26650M1-B",
         "manufacturer": {
           "type": "Organization",
@@ -365,6 +366,16 @@ export const TEMPLATES: { slug: string; format: string; record: Record<string, u
         },
         "comment": "Microporous polyolefin separator."
       },
+      "provenance": {
+        "source_type": "manual",
+        "source_name": "Catenaro 2021 ingestion pilot",
+        "source_file": "sources/a123/anr26650m1-b/catenaro-2021/battery.json",
+        "source_url": "https://doi.org/10.17632/kxsbr4x3j2.2",
+        "retrieved_at": 1772556000,
+        "workflow_version": "battinfo-ingest-0.2.0",
+        "comment": "Manually curated example for schema validation and RDF mapping review.",
+        "citation": "https://doi.org/10.17632/kxsbr4x3j2.2"
+      },
       "notes": [
         "Primary review artifact for BattINFO/BDF battery descriptor structure.",
         "Values are representative and intended for schema/mapping review.",
@@ -379,6 +390,7 @@ export const TEMPLATES: { slug: string; format: string; record: Record<string, u
     "record": {
       "schema_version": "0.2.0",
       "cell_spec": {
+        "id": "https://w3id.org/battinfo/spec/1c4m-7p9q-2k6t-8v3r",
         "name": "ExampleLab COIN-LFP-2032",
         "manufacturer": {
           "type": "Organization",
@@ -534,6 +546,14 @@ export const TEMPLATES: { slug: string; format: string; record: Record<string, u
           }
         }
       },
+      "provenance": {
+        "source_type": "manual",
+        "source_name": "BattINFO example fixtures",
+        "source_file": "examples/cell-descriptors/coin-detailed.example.json",
+        "retrieved_at": 1773201600,
+        "workflow_version": "example-fixtures-0.1",
+        "comment": "Canonical detailed coin-cell fixture."
+      },
       "notes": [
         "Detailed coin-cell descriptor for validation coverage.",
         "Example fixture for detailed coin-cell descriptions."
@@ -546,6 +566,7 @@ export const TEMPLATES: { slug: string; format: string; record: Record<string, u
     "record": {
       "schema_version": "0.2.0",
       "cell_spec": {
+        "id": "https://w3id.org/battinfo/spec/2d5n-8r4k-3p7t-6v9m",
         "name": "ExampleLab CYL-LFP-18650",
         "manufacturer": {
           "type": "Organization",
@@ -729,6 +750,14 @@ export const TEMPLATES: { slug: string; format: string; record: Record<string, u
           }
         }
       },
+      "provenance": {
+        "source_type": "manual",
+        "source_name": "BattINFO example fixtures",
+        "source_file": "examples/cell-descriptors/cylindrical-detailed.example.json",
+        "retrieved_at": 1773201600,
+        "workflow_version": "example-fixtures-0.1",
+        "comment": "Canonical detailed cylindrical fixture."
+      },
       "notes": [
         "Detailed cylindrical descriptor for validation coverage.",
         "Example fixture for detailed cylindrical-cell descriptions."
@@ -741,6 +770,7 @@ export const TEMPLATES: { slug: string; format: string; record: Record<string, u
     "record": {
       "schema_version": "0.2.0",
       "cell_spec": {
+        "id": "https://w3id.org/battinfo/spec/pmgd-9cyx-z05w-yajf",
         "name": "A123 ANR26650M1-B",
         "manufacturer": {
           "type": "Organization",
@@ -1044,6 +1074,16 @@ export const TEMPLATES: { slug: string; format: string; record: Record<string, u
         },
         "comment": "Microporous separator."
       },
+      "provenance": {
+        "source_type": "manual",
+        "source_name": "BattINFO schema examples",
+        "source_file": "examples/cell-descriptors/extended.example.json",
+        "source_url": "https://w3id.org/battinfo",
+        "retrieved_at": 1773000000,
+        "workflow_version": "battinfo-refactor",
+        "comment": "Created as a complementary full-option example.",
+        "citation": "https://w3id.org/battinfo"
+      },
       "notes": [
         "Extended example includes all optional descriptor sections.",
         "Values are illustrative and for schema integration/testing.",
@@ -1058,6 +1098,7 @@ export const TEMPLATES: { slug: string; format: string; record: Record<string, u
     "record": {
       "schema_version": "0.2.0",
       "cell_spec": {
+        "id": "https://w3id.org/battinfo/spec/pvn1-43h7-rm3e-mjqq",
         "name": "A123 ANR26650M1-B",
         "manufacturer": {
           "type": "Organization",
@@ -1068,6 +1109,9 @@ export const TEMPLATES: { slug: string; format: string; record: Record<string, u
         "chemistry": "Li-ion",
         "positive_electrode_basis": "LFP",
         "negative_electrode_basis": "graphite"
+      },
+      "provenance": {
+        "source_type": "manual"
       }
     }
   },
@@ -1077,6 +1121,7 @@ export const TEMPLATES: { slug: string; format: string; record: Record<string, u
     "record": {
       "schema_version": "0.2.0",
       "cell_spec": {
+        "id": "https://w3id.org/battinfo/spec/4h8p-3t6m-9q2k-7v5r",
         "name": "ExampleLab POUCH-ML-LFP-018",
         "manufacturer": {
           "type": "Organization",
@@ -1243,6 +1288,14 @@ export const TEMPLATES: { slug: string; format: string; record: Record<string, u
           }
         }
       },
+      "provenance": {
+        "source_type": "manual",
+        "source_name": "BattINFO example fixtures",
+        "source_file": "examples/cell-descriptors/pouch-multilayer-detailed.example.json",
+        "retrieved_at": 1773201600,
+        "workflow_version": "example-fixtures-0.1",
+        "comment": "Canonical detailed multilayer pouch fixture."
+      },
       "notes": [
         "Detailed multilayer pouch descriptor for validation coverage.",
         "Example fixture for detailed multilayer pouch-cell descriptions."
@@ -1255,6 +1308,7 @@ export const TEMPLATES: { slug: string; format: string; record: Record<string, u
     "record": {
       "schema_version": "0.2.0",
       "cell_spec": {
+        "id": "https://w3id.org/battinfo/spec/3f7k-2m9r-4t6p-8v5q",
         "name": "ExampleLab POUCH-SL-LFP-001",
         "manufacturer": {
           "type": "Organization",
@@ -1410,6 +1464,14 @@ export const TEMPLATES: { slug: string; format: string; record: Record<string, u
           }
         }
       },
+      "provenance": {
+        "source_type": "manual",
+        "source_name": "BattINFO example fixtures",
+        "source_file": "examples/cell-descriptors/pouch-single-layer-detailed.example.json",
+        "retrieved_at": 1773201600,
+        "workflow_version": "example-fixtures-0.1",
+        "comment": "Canonical detailed single-layer pouch fixture."
+      },
       "notes": [
         "Detailed single-layer pouch descriptor for validation coverage.",
         "Example fixture for detailed single-layer pouch-cell descriptions."
@@ -1422,6 +1484,7 @@ export const TEMPLATES: { slug: string; format: string; record: Record<string, u
     "record": {
       "schema_version": "0.2.0",
       "cell_spec": {
+        "id": "https://w3id.org/battinfo/spec/5j9r-4k7p-2m8t-6v3q",
         "name": "ExampleLab PRISM-LFP-020",
         "manufacturer": {
           "type": "Organization",
@@ -1587,6 +1650,14 @@ export const TEMPLATES: { slug: string; format: string; record: Record<string, u
             "unit": "um"
           }
         }
+      },
+      "provenance": {
+        "source_type": "manual",
+        "source_name": "BattINFO example fixtures",
+        "source_file": "examples/cell-descriptors/prismatic-detailed.example.json",
+        "retrieved_at": 1773201600,
+        "workflow_version": "example-fixtures-0.1",
+        "comment": "Canonical detailed prismatic fixture."
       },
       "notes": [
         "Detailed prismatic descriptor for validation coverage.",
