@@ -96,10 +96,17 @@ function Chevron({ hidden }: { hidden?: boolean }) {
 // describes rather than beside the label: the question is always "what do I put
 // in this box". Kept to an icon because one printed description per field drowns
 // the fields it explains.
+// Reachable by keyboard as well as by pointer, and the same sentence rides on
+// `title` so it survives for a screen reader and for anyone the hover panel
+// never reaches.
 function Info({ text }: { text?: string }) {
   if (!text) return <span className="w-3.5 shrink-0" />;
   return (
-    <span className="group/info relative w-3.5 shrink-0 cursor-help text-ink-faint/20 transition-colors group-hover/row:text-ink-faint/60 hover:!text-ink-faint">
+    <span
+      tabIndex={0}
+      title={text}
+      className="group/info relative w-3.5 shrink-0 cursor-help text-ink-faint/20 outline-none transition-colors group-hover/row:text-ink-faint/60 hover:!text-ink-faint focus-visible:!text-ink-faint"
+    >
       <svg viewBox="0 0 16 16" aria-hidden className="w-3.5">
         <circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
         <path
@@ -111,7 +118,10 @@ function Info({ text }: { text?: string }) {
         />
         <circle cx="8" cy="11.6" r="0.75" fill="currentColor" />
       </svg>
-      <span className="pointer-events-none absolute right-5 top-0 z-20 hidden w-80 rounded border border-border bg-surface p-2 text-xs leading-snug text-ink shadow-lg group-hover/info:block">
+      <span
+        aria-hidden
+        className="pointer-events-none absolute right-5 top-0 z-20 hidden w-80 rounded border border-border bg-surface p-2 text-xs leading-snug text-ink shadow-lg group-hover/info:block group-focus/info:block"
+      >
         {text}
       </span>
     </span>
@@ -170,7 +180,10 @@ function ValueRow({
         <span className="flex-1" />
         <Info text={help} />
         <div className={CONTROL}>{children}</div>
-        <span className={`${STATE} ${wanted ? "text-warning" : "text-transparent"}`}>required</span>
+        {/* The slot is always there so nothing shifts, but the word only
+            exists when it is true: `text-transparent` hid it from the eye and
+            left every row announcing "required" to a screen reader. */}
+        <span className={`${STATE} text-warning`}>{wanted ? "required" : null}</span>
       </div>
       <UnderControl text={problem} />
       {extra ? (
@@ -250,6 +263,45 @@ function AddField({ options, onAdd }: { options: Field[]; onAdd: (field: Field) 
   );
 }
 
+// The record holds a number; the box holds what was typed. They diverge only
+// while a decimal is half-written -- "0.0" on the way to "0.05" is already a
+// whole number whose own text is "0", so echoing the record back would eat the
+// digit under the cursor and put 0.05 out of reach. The typed text therefore
+// wins for as long as it still parses to the value this box emitted; a value
+// from anywhere else (a template, an upload, a reset) does not parse back and
+// takes over.
+function NumberInput({
+  value,
+  onChange,
+  className,
+  label,
+}: {
+  value: unknown;
+  onChange: (next: unknown) => void;
+  className: string;
+  label: string;
+}) {
+  const [typed, setTyped] = useState(value === undefined ? "" : String(value));
+  const mine = typed.trim() !== "" && Number(typed) === value;
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      aria-label={label}
+      className={className}
+      value={mine ? typed : value === undefined ? "" : String(value)}
+      onChange={(e) => {
+        const raw = e.target.value;
+        setTyped(raw);
+        // Keep what was typed when it is not a number yet. Storing NaN would be
+        // a lie; the raw string lets the validator say "expected a number".
+        const parsed = Number(raw);
+        onChange(raw.trim() !== "" && Number.isFinite(parsed) ? parsed : raw);
+      }}
+    />
+  );
+}
+
 function Leaf({
   field,
   value,
@@ -266,7 +318,7 @@ function Leaf({
 
   if (control.kind === "select") {
     return (
-      <select className={cls} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)}>
+      <select aria-label={field.label} className={cls} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)}>
         <option value="">—</option>
         {control.options.map((option) => (
           <option key={option} value={option}>
@@ -281,6 +333,7 @@ function Leaf({
     return (
       <input
         type="checkbox"
+        aria-label={field.label}
         checked={value === true}
         onChange={(e) => onChange(e.target.checked)}
         className="h-4 w-4 rounded border-border bg-surface"
@@ -289,27 +342,14 @@ function Leaf({
   }
 
   if (control.kind === "number") {
-    // Keep what was typed when it is not a number yet. Storing NaN would be a
-    // lie; the raw string lets the validator say "expected a number" instead.
-    return (
-      <input
-        type="text"
-        inputMode="decimal"
-        className={cls}
-        value={value === undefined ? "" : String(value)}
-        onChange={(e) => {
-          const raw = e.target.value;
-          const parsed = Number(raw);
-          onChange(raw.trim() !== "" && Number.isFinite(parsed) ? parsed : raw);
-        }}
-      />
-    );
+    return <NumberInput value={value} onChange={onChange} className={cls} label={field.label} />;
   }
 
   return (
     <input
       type={control.kind === "text" ? (INPUT_TYPE[control.format ?? ""] ?? "text") : "text"}
       list={SUGGESTS[field.key]}
+      aria-label={field.label}
       className={cls}
       value={String(value ?? "")}
       onChange={(e) => onChange(e.target.value)}
@@ -422,7 +462,12 @@ function ArrayBranch({
             problem={problem}
             extra={after?.(itemPath)}
           >
-            <Leaf field={{ ...field, loc: control.items }} value={item} onChange={(next) => replace(index, next)} flagged={!!problem} />
+            <Leaf
+              field={{ ...field, label: `${field.label} ${index + 1}`, loc: control.items }}
+              value={item}
+              onChange={(next) => replace(index, next)}
+              flagged={!!problem}
+            />
           </ValueRow>
         );
       })}
@@ -518,7 +563,7 @@ function MapBranch({
             extra={after?.(here)}
           >
             <Leaf
-              field={{ ...field, loc: values }}
+              field={{ ...field, label: key, loc: values }}
               value={item}
               onChange={(next) => onChange({ ...value, [key]: next })}
               flagged={issues.has(here)}
@@ -534,6 +579,7 @@ function MapBranch({
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && add()}
           placeholder="name"
+          aria-label={`Name of a new ${field.label} entry`}
           list={PROPERTY_LIST}
           className={`${LABEL} rounded border border-border bg-surface/60 px-2 py-0.5 text-ink focus:border-brand-500 focus:outline-none`}
         />
@@ -557,6 +603,7 @@ export function ObjectNode({
   onChange,
   issues,
   after,
+  omit,
   path = "",
   depth = 0,
 }: {
@@ -565,6 +612,9 @@ export function ObjectNode({
   onChange: (next: Obj) => void;
   issues: Issues;
   after?: After;
+  /** Keys the page fills in itself. Deliberately not passed to children: only
+   *  the record's own top level has fields the library stamps. */
+  omit?: string[];
   path?: string;
   depth?: number;
 }) {
@@ -572,7 +622,7 @@ export function ObjectNode({
   // than the one level shown by default.
   const [opened, setOpened] = useState<string[]>([]);
 
-  const fields = fieldsOf(loc);
+  const fields = fieldsOf(loc).filter((field) => !omit?.includes(field.key));
   // A value the schema fixes is already set and not worth a row.
   const editable = fields.filter((field) => controlFor(field.loc).kind !== "const");
   const byKey = (key: string) => editable.find((field) => field.key === key);
@@ -581,11 +631,20 @@ export function ObjectNode({
   // label is a selector rather than a name. The member on show is owned by that
   // row; any further members the record also carries stay ordinary rows, so
   // nothing a record holds is ever hidden.
-  const groups = requiredGroups(loc).map((keys) => {
-    const chosen = keys.find((key) => key in value);
-    const kind = chosen ? controlFor((byKey(chosen) as Field).loc).kind : "";
-    return { keys, chosen, collapsible: ["object", "map", "array"].includes(kind) };
-  });
+  // A group only offers members this node can actually render. A required-group
+  // may name a key that is not an editable property here -- a value the schema
+  // fixes, or one declared in a branch rather than in `properties` -- and a
+  // selector option that resolves to no field would crash the row rather than
+  // fill it. No schema does this today; twenty-two record types is not the
+  // place to rely on that.
+  const groups = requiredGroups(loc)
+    .map((keys) => keys.filter((key) => byKey(key)))
+    .filter((keys) => keys.length > 1)
+    .map((keys) => {
+      const chosen = keys.find((key) => key in value);
+      const kind = chosen ? controlFor((byKey(chosen) as Field).loc).kind : "";
+      return { keys, chosen, collapsible: ["object", "map", "array"].includes(kind) };
+    });
   const owned = new Set(groups.map((group) => group.chosen).filter(Boolean) as string[]);
 
   const shown = editable.filter((field) => (field.required || field.key in value) && !owned.has(field.key));

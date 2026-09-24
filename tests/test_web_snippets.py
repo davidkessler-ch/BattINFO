@@ -149,3 +149,28 @@ def test_docs_page_quickstart_python_executes(tmp_path: Path) -> None:
     finally:
         os.chdir(cwd)
     assert "w3id.org/battinfo/spec/" in buffer.getvalue()
+
+
+def test_author_form_jsonld_exclusions_match_the_transformers() -> None:
+    """The form must not offer a conversion record_to_jsonld would refuse.
+
+    web/app/author/types.ts hand-lists the record types with no JSON-LD
+    emitter, because it is a fact about the Python transform that no schema
+    states. Add an emitter (or a record type) without updating that list and
+    the button either 500s or stays greyed out on a type that now works.
+    """
+    from battinfo.entities import ENTITY_KINDS
+    from battinfo.jsonld import _TRANSFORMERS
+
+    source = (ROOT / "web" / "app" / "author" / "types.ts").read_text(encoding="utf-8")
+    match = re.search(r"const NO_JSONLD = new Set\(\[(.*?)\]\)", source, re.DOTALL)
+    assert match, "NO_JSONLD not found in web/app/author/types.ts"
+    web_excluded = set(re.findall(r'"([^"]+)"', match.group(1)))
+
+    keys = {kind.record_key for kind in ENTITY_KINDS} | {"organization"}
+    expected = {key for key in keys if key not in _TRANSFORMERS}
+
+    assert web_excluded == expected, (
+        "web/app/author/types.ts NO_JSONLD drifted from battinfo.jsonld._TRANSFORMERS: "
+        f"web-only={web_excluded - expected}, missing={expected - web_excluded}"
+    )

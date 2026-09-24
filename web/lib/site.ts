@@ -45,6 +45,7 @@ export const site = {
 // Examples into the tools' presets plus the docs gallery; both stay reachable
 // (footer, deep links, cross-links), just not as top-level peers.
 export const primaryNav = [
+  { label: "Author", href: "/author" },
   { label: "Playground", href: "/create" },
   { label: "Validate", href: "/validate" },
   { label: "Publish", href: "/publish" },
@@ -95,6 +96,7 @@ export const footerNav = [
   {
     heading: "Tools",
     links: [
+      { label: "Author a record", href: "/author" },
       { label: "Playground", href: "/create" },
       { label: "Validate a record", href: "/validate" },
       { label: "Properties & units", href: "/properties" },

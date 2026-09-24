@@ -66,8 +66,9 @@ export function deref(loc: Located): Located {
 }
 
 // What kind of input a value needs. "const" is a value the schema fixes, so the
-// form sets it rather than asking. "unsupported" is an honest dead end: we
-// render nothing rather than guess wrong.
+// form sets it rather than asking. "unsupported" is a shape this file cannot
+// read; the tree falls back to a plain text box for it, and scripts/
+// check-author.ts fails the build if any reachable field ever reaches it.
 export type Control =
   | { kind: "text"; format?: string }
   | { kind: "number"; integer: boolean }
@@ -98,11 +99,29 @@ export function controlFor(loc: Located): Control {
   if (schema.const !== undefined) return { kind: "const", value: schema.const };
   if (Array.isArray(schema.enum)) return { kind: "select", options: schema.enum.map(String) };
 
+  // A schema that constrains nothing -- `{}`, or nothing but prose -- permits
+  // any value, so a plain box is the one control that cannot contradict it.
+  // Dataset's per-file `conditions` is the only one: what is typed there stays
+  // a string, which that schema allows.
+  if (Object.keys(schema).every((key) => key === "description" || key === "title")) {
+    return { kind: "text" };
+  }
+
+  // `type: ["number", "null"]` is a nullable value, not a shape of its own: the
+  // null branch says "may be absent", which removing the row already says. The
+  // first real member wins, as it does for a union of branches above. Without
+  // this, ten fields -- every one of test-protocol's safety limits among them --
+  // fall through to an untyped box that stores "4.2" as a string the schema
+  // then rejects.
+  const type = Array.isArray(schema.type)
+    ? schema.type.find((member: unknown) => member !== "null")
+    : schema.type;
+
   // A union is only a union when the schema has no shape of its own. Several
   // schemas carry `type`, `properties` AND an `anyOf` -- there the anyOf states
   // a cross-field constraint (ajv's job), not a choice of shape, so reading it
   // as one would throw the object away.
-  if (schema.type === undefined && !schema.properties) {
+  if (type === undefined && !schema.properties) {
     const union = schema.anyOf ?? schema.oneOf;
     if (Array.isArray(union)) {
       // Branches are often bare $refs, so deref before judging them. Taking the
@@ -116,7 +135,7 @@ export function controlFor(loc: Located): Control {
     }
   }
 
-  switch (schema.type) {
+  switch (type) {
     case "string":
       return { kind: "text", format: typeof schema.format === "string" ? schema.format : undefined };
     case "number":

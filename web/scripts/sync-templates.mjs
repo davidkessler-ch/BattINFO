@@ -6,10 +6,11 @@
 // valid, already reviewed -- so they are the templates rather than a set
 // invented here.
 //
-// The examples are copied verbatim. What turns a record into a template --
-// dropping the identity and the provenance -- is one rule in app/author/page.tsx,
-// applied both when a template is chosen and when one is saved, so the two can
-// never disagree about what a template is.
+// The examples are copied verbatim, minted IRI and all. What turns one into a
+// template -- dropping that identity and the provenance block naming the file
+// it was curated from -- is `asTemplate` in app/author/load.ts, applied when a
+// template is chosen. scripts/check-author.ts fails the build if a template
+// could reach the form still carrying either.
 //
 //   Run:   npm run sync:templates
 //   CI:    npm run sync:templates -- --check   (fails on drift)

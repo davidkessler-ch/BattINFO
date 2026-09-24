@@ -14,83 +14,30 @@
 // reader work out the rules three times.
 
 import { useRef, useState } from "react";
-import { controlFor, fieldsOf, join, type Located } from "./schema";
+import { useRouter } from "next/navigation";
+import { RECORD_TYPES, slugOf, type RecordType } from "./types";
+import { asTemplate, read, type Loaded } from "./load";
 import { TEMPLATES } from "@/lib/templates.generated";
+import { detectRecordType } from "@/lib/validate";
 
 type Obj = Record<string, unknown>;
 
-// One card shape for the start screen, and one button shape for the whole
-// page. Both live here because page.tsx imports this module, not the reverse.
+// One card shape for the start screen.
 const CARD =
   "block w-full rounded border border-border px-4 py-3 text-left transition-colors hover:border-brand-500";
 const CARD_TITLE = "text-sm font-medium text-ink";
 const CARD_NOTE = "mt-1 block text-xs leading-relaxed text-ink-faint";
 
-export function buttonClass(off = false): string {
-  return `shrink-0 rounded border px-3 py-1 text-sm ${
-    off ? "cursor-not-allowed border-border/40 text-ink-faint/40" : "border-border text-ink hover:border-brand-500"
-  }`;
-}
-
-// An uploaded file is someone else's JSON. Anything the schema does not know is
-// dropped rather than carried into a record that would then fail validation for
-// a reason the form cannot show -- the tree only draws fields the schema names,
-// so an unknown key would be invisible and still in the output.
-function sanitize(value: unknown, loc: Located, path = "", removed: string[] = []): unknown {
-  const control = controlFor(loc);
-  if (value === null || typeof value !== "object") return value;
-
-  if (control.kind === "array") {
-    const items = Array.isArray(value) ? value : [];
-    return items.map((item, index) => sanitize(item, control.items, join(path, index), removed));
-  }
-
-  if (control.kind === "map") {
-    const allowed = new RegExp(control.keyPattern ?? ".");
-    const out: Obj = {};
-    for (const [key, item] of Object.entries(value as Obj)) {
-      if (!allowed.test(key)) removed.push(join(path, key));
-      else out[key] = sanitize(item, control.values, join(path, key), removed);
-    }
-    return out;
-  }
-
-  if (control.kind !== "object") return value;
-
-  const known = new Map(fieldsOf(loc).map((field) => [field.key, field.loc]));
-  const out: Obj = {};
-  for (const [key, item] of Object.entries(value as Obj)) {
-    const child = known.get(key);
-    if (!child) removed.push(join(path, key));
-    else out[key] = sanitize(item, child, join(path, key), removed);
-  }
-  return out;
-}
-
-export interface Loaded {
-  record: Obj;
-  removed: string[];
-}
-
-async function read(file: File, root: Located): Promise<Loaded> {
-  const parsed = JSON.parse(await file.text());
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("A BattINFO JSON must be a JSON object.");
-  }
-  const removed: string[] = [];
-  return { record: sanitize(parsed, root, "", removed) as Obj, removed };
-}
-
 // Just the input. Separated from what opens it so a card and a button can both
 // be the thing you click.
 function FilePicker({
   pick,
-  root,
+  type,
   onLoad,
   onError,
 }: {
   pick: React.RefObject<HTMLInputElement>;
-  root: Located;
+  type: RecordType;
   onLoad: (loaded: Loaded) => void;
   onError: (message: string) => void;
 }) {
@@ -98,14 +45,14 @@ function FilePicker({
     <input
       ref={pick}
       type="file"
-      accept="application/json,.json,.jsonld"
+      accept="application/json,.json"
       className="hidden"
       onChange={async (event) => {
         const file = event.target.files?.[0];
         event.target.value = ""; // so the same file can be picked twice
         if (!file) return;
         try {
-          onLoad(await read(file, root));
+          onLoad(await read(file, type));
         } catch (error) {
           onError(error instanceof Error ? error.message : String(error));
         }
@@ -115,11 +62,11 @@ function FilePicker({
 }
 
 function UploadCard({
-  root,
+  type,
   onLoad,
   onError,
 }: {
-  root: Located;
+  type: RecordType;
   onLoad: (loaded: Loaded) => void;
   onError: (message: string) => void;
 }) {
@@ -133,7 +80,7 @@ function UploadCard({
           is dropped.
         </span>
       </button>
-      <FilePicker pick={pick} root={root} onLoad={onLoad} onError={onError} />
+      <FilePicker pick={pick} type={type} onLoad={onLoad} onError={onError} />
     </>
   );
 }
@@ -141,25 +88,46 @@ function UploadCard({
 // The first screen. Three ways in, stated plainly, because an empty form gives
 // no clue that the other two exist.
 export function StartScreen({
-  root,
+  type,
   onEmpty,
   onPick,
   onLoad,
   onResume,
 }: {
-  root: Located;
+  type: RecordType;
   onEmpty: () => void;
   onPick: (record: Obj) => void;
   onLoad: (loaded: Loaded) => void;
   onResume?: () => void;
 }) {
+  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  // Only the cell spec has curated starting points today. Which type a template
+  // belongs to is read from the record itself, so a second source needs no
+  // change here.
+  const templates = TEMPLATES.filter((template) => detectRecordType(template.record as Obj) === type.key);
+
   return (
     <section className="mx-auto max-w-xl py-20">
-      <h1 className="text-xl font-semibold text-ink">New cell spec</h1>
+      <h1 className="text-xl font-semibold text-ink">New {type.label.toLowerCase()}</h1>
       <p className="mt-2 text-sm leading-relaxed text-ink-faint">
         Every field comes from the BattINFO schemas, so only what they allow can be added.
       </p>
+
+      <label className="mt-6 flex items-center gap-2 text-sm text-ink-faint">
+        Describing
+        <select
+          value={slugOf(type)}
+          onChange={(e) => router.push(`/author/${e.target.value}`)}
+          className="rounded border border-border bg-surface px-2 py-1 text-sm text-ink focus:border-brand-500 focus:outline-none"
+        >
+          {RECORD_TYPES.map((option) => (
+            <option key={option.key} value={slugOf(option)}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
 
       {/* Leaving the form must not strand the draft behind this screen. */}
       {onResume ? (
@@ -175,29 +143,32 @@ export function StartScreen({
           <span className={CARD_NOTE}>A blank record with only the required fields.</span>
         </button>
 
-        <details className="rounded border border-border transition-colors hover:border-brand-500">
-          <summary className="cursor-pointer list-none px-4 py-3 marker:hidden">
-            <span className={CARD_TITLE}>Start from a template</span>
-            <span className={CARD_NOTE}>
-              One of {TEMPLATES.length} curated records, roughly one per cell format.
-            </span>
-          </summary>
-          <div className="max-h-64 overflow-y-auto border-t border-border">
-            {TEMPLATES.map((template) => (
-              <button
-                key={template.slug}
-                type="button"
-                onClick={() => onPick(structuredClone(template.record) as Obj)}
-                className="flex w-full items-baseline justify-between gap-4 border-b border-border/50 px-4 py-2 text-left last:border-0 hover:bg-brand-500/10"
-              >
-                <span className="text-sm text-ink">{template.slug}</span>
-                <span className="shrink-0 text-xs text-ink-faint">{template.format}</span>
-              </button>
-            ))}
-          </div>
-        </details>
+        {templates.length ? (
+          <details className="rounded border border-border transition-colors hover:border-brand-500">
+            <summary className="cursor-pointer list-none px-4 py-3 marker:hidden">
+              <span className={CARD_TITLE}>Start from a template</span>
+              <span className={CARD_NOTE}>
+                One of {templates.length} curated records, roughly one per cell format. Its identifier and
+                provenance are left behind.
+              </span>
+            </summary>
+            <div className="max-h-64 overflow-y-auto border-t border-border">
+              {templates.map((template) => (
+                <button
+                  key={template.slug}
+                  type="button"
+                  onClick={() => onPick(asTemplate(structuredClone(template.record) as Obj, type))}
+                  className="flex w-full items-baseline justify-between gap-4 border-b border-border/50 px-4 py-2 text-left last:border-0 hover:bg-brand-500/10"
+                >
+                  <span className="text-sm text-ink">{template.slug}</span>
+                  <span className="shrink-0 text-xs text-ink-faint">{template.format}</span>
+                </button>
+              ))}
+            </div>
+          </details>
+        ) : null}
 
-        <UploadCard root={root} onLoad={onLoad} onError={setError} />
+        <UploadCard type={type} onLoad={onLoad} onError={setError} />
       </div>
 
       {error ? <p className="mt-3 text-sm text-error">{error}</p> : null}
